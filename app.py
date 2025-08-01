@@ -28,7 +28,7 @@ def alert(symbol: str):
     }
 @app.get("/whatsup")
 def whatsup():
-    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '3ff04f734d53c379f5663a17655d18f7')
+    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
     message = client.messages.create(
     body='🚨 Alert: Your system has triggered an event!',
     from_='whatsapp:+14155238886',  # Twilio sandbox number
