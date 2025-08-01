@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 import yfinance as yf
+from twilio.rest import Client
 import requests
 
 app = FastAPI()
 
-NEWS_API_KEY = "your_newsapi_key_here"
 
 def get_stock_price(symbol):
     stock = yf.Ticker(symbol)
@@ -27,4 +27,15 @@ def alert(symbol: str):
         "symbol": symbol,
         "price": price,
         "news": news
+    }
+@app.get("/whatsup")
+def whatsup():
+    client = Client(account_sid, auth_token)
+    message = client.messages.create(
+    body='🚨 Alert: Your system has triggered an event!',
+    from_='whatsapp:+14155238886',  # Twilio sandbox number
+    to='whatsapp:+919886402374'     # Your verified WhatsApp number
+    )
+    return {
+        "Message sent:", message.sid
     }
