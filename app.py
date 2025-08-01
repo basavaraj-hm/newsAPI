@@ -32,7 +32,7 @@ def whatsup():
     message = client.messages.create(
     body='🚨 Alert: Your system has triggered an event!',
     from_='whatsapp:+14155238886',  # Twilio sandbox number
-    to='whatsapp:+919886402374'     # Your verified WhatsApp number
+    to='whatsapp:+919538505753'     # Your verified WhatsApp number
     )
     return {
         "Message sent:", message.sid
