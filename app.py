@@ -43,32 +43,39 @@ def whatsup():
 
 @app.get("/newsgold")
 def newsgold():
-    url = "https://www.google.com"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, "html.parser")
+    try:
+        
+        url = "https://www.google.com"
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
 
-    table = soup.find("table", {"class": "gold_silver_table"})
-    body = []
+        table = soup.find("table", {"class": "gold_silver_table"})
+        body = []
 
-    if table:
-        rows = table.find_all("tr")
-        for row in rows[1:]:  # Skip header
-            cols = row.find_all("td")
-            if len(cols) >= 3:
-                city = cols[0].text.strip()
-                gold_22k = cols[1].text.strip()
-                gold_24k = cols[2].text.strip()
-                body.append({
-                    "City": city,
-                    "22K Gold (₹/10g)": gold_22k,
-                    "24K Gold (₹/10g)": gold_24k
-                })
+        if table:
+            rows = table.find_all("tr")
+            for row in rows[1:]:  # Skip header
+                cols = row.find_all("td")
+                if len(cols) >= 3:
+                    city = cols[0].text.strip()
+                    gold_22k = cols[1].text.strip()
+                    gold_24k = cols[2].text.strip()
+                    body.append({
+                        "City": city,
+                        "22K Gold (₹/10g)": gold_22k,
+                        "24K Gold (₹/10g)": gold_24k
+                    })
 
-    return {"gold_rates": response}
+        return {"gold_rates": response}
+    
+    except requests.exceptions.RequestException as e:
+        return {"request failed": e}
+        
 
 
 
     
+
 
 
 
