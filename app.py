@@ -66,7 +66,7 @@ def newsgold():
                         "24K Gold (₹/10g)": gold_24k
                     })
 
-        return {"gold_rates": response}
+        return {"gold_rates": body}
     
     except requests.exceptions.RequestException as e:
         return {"request failed": e}
@@ -75,6 +75,7 @@ def newsgold():
 
 
     
+
 
 
 
