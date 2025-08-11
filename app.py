@@ -64,11 +64,12 @@ def newsgold():
                     "24K Gold (₹/10g)": gold_24k
                 })
 
-    return {"gold_rates": body}
+    return {"gold_rates": response}
 
 
 
     
+
 
 
 
