@@ -3,4 +3,5 @@ uvicorn
 yfinance
 requests
 twilio
-BeautifulSoup
+beautifulsoup4
+
