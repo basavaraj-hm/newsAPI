@@ -43,7 +43,7 @@ def whatsup():
 
 @app.get("/newsgold")
 def newsgold():
-    url = "https://www.goodreturns.in/gold-rates/"
+    url = "https://www.google.com"
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -69,6 +69,7 @@ def newsgold():
 
 
     
+
 
 
 
