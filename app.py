@@ -47,7 +47,7 @@ def newsgold():
         
         
         
-        
+        url = "https://www.google.com"  
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
         print("Connection successful!")
@@ -61,6 +61,7 @@ def newsgold():
 
 
     
+
 
 
 
