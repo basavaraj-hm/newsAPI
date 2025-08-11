@@ -2,7 +2,7 @@ import requests
 from fastapi import FastAPI
 import yfinance as yf
 from twilio.rest import Client
-from bs4 import beautifulsoup4
+from bs4 import BeautifulSoup
 
 
 app = FastAPI()
@@ -59,4 +59,5 @@ def newsgold():
     return {
     print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
     }
+
 
