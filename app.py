@@ -31,7 +31,7 @@ def alert(symbol: str):
 @app.get("/whatsup")
 def whatsup():
     
-    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
+    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', 'f112872954573f8eaacb67ac2e4fdd10')
     message = client.messages.create(
     body="whats app message is delevered",
     from_='whatsapp:+14155238886',  # Twilio sandbox number
@@ -59,5 +59,6 @@ def newsgold():
     return {
     print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
     }
+
 
 
