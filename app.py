@@ -28,12 +28,34 @@ def alert(symbol: str):
     }
 @app.get("/whatsup")
 def whatsup():
+    # URL of the gold rate page
+    url = "https://www.goodreturns.in/gold-rates/"
+
+    # Send a GET request
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    # Find the table containing gold rates
+    table = soup.find("table", {"class": "gold_silver_table"})
+
+    # Extract rows from the table
+    rows = table.find_all("tr")
+
+    # Print header
+    #print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
+
+
+
+
+
+    
     client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
     message = client.messages.create(
-    body='🚨 Alert: Your system has triggered an event!',
+    body={'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20},
     from_='whatsapp:+14155238886',  # Twilio sandbox number
     to='whatsapp:+919538505753'     # Your verified WhatsApp number
     )
     return {
         "Message sent:", message.sid
     }
+
