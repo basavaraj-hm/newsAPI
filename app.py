@@ -52,6 +52,10 @@ def newsgold():
         response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
         print("Connection successful!")
         print("Status Code:", response.status_code)
+        
+        soup = BeautifulSoup(response.content, "html.parser")
+        print(soup.title.string if soup.title else "No title found")
+
     except requests.exceptions.RequestException as e:
         
         print("Connection failed:", e)
@@ -61,6 +65,7 @@ def newsgold():
 
 
     
+
 
 
 
