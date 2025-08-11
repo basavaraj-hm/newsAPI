@@ -54,11 +54,12 @@ def newsgold():
         rows = table.find_all("tr")
         body = []
     return {
-        "test", table
+        "test", response
     }
 
 
     
+
 
 
 
