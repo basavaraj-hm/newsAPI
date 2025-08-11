@@ -45,24 +45,23 @@ def whatsup():
 def newsgold():
     try:
         
-        url = "https://www.google.com"
+        
+        
+        
         response = requests.get(url, timeout=10)
-        soup = BeautifulSoup(response.content, "html.parser")
-
-        table = soup.find("table", {"class": "RNmpXc"})
-        body = []
-        
-        
-
-        return {"gold_rates": soup}
-    
+        response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
+        print("Connection successful!")
+        print("Status Code:", response.status_code)
     except requests.exceptions.RequestException as e:
-        return {"request failed": e}
+        
+        print("Connection failed:", e)
+
         
 
 
 
     
+
 
 
 
