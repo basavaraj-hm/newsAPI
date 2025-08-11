@@ -54,7 +54,7 @@ def newsgold():
         
         
 
-        return {"gold_rates": table}
+        return {"gold_rates": soup}
     
     except requests.exceptions.RequestException as e:
         return {"request failed": e}
@@ -63,6 +63,7 @@ def newsgold():
 
 
     
+
 
 
 
