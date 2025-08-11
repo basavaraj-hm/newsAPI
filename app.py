@@ -40,7 +40,7 @@ def whatsup():
     return {
         "Message sent:", message.sid
     }
-@app.get("newsgold")
+@app.get("/newsgold")
 def newsgold():
     # URL of the gold rate page
     url = "https://www.goodreturns.in/gold-rates/"
@@ -57,8 +57,10 @@ def newsgold():
 
     # Print header
     return {
-    print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
+        print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
+    
     }
+
 
 
 
