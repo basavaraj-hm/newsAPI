@@ -53,24 +53,13 @@ def newsgold():
     if table:
         rows = table.find_all("tr")
         body = []
-
-    for row in rows[1:]:
-        # Skip header
-        cols = row.find_all("td")
-        if len(cols) >= 3:
-            city = cols[0].text.strip()
-            gold_22k = cols[1].text.strip()
-            gold_24k = cols[2].text.strip()
-            body.append({
-                "City": city,
-                "22K Gold (₹/10g)": gold_22k,
-                "24K Gold (₹/10g)": gold_24k
-            })
-
     return {
-        "Message"
-    
+        "test", table
     }
+
+
+    
+
 
 
 
