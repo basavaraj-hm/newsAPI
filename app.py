@@ -55,6 +55,7 @@ def newsgold():
         
         soup = BeautifulSoup(response.content, "html.parser")
         print(soup.title.string if soup.title else "No title found")
+        print(soup.body.string if soup.body else "No body found")
 
     except requests.exceptions.RequestException as e:
         
@@ -65,6 +66,7 @@ def newsgold():
 
 
     
+
 
 
 
