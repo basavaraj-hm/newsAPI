@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import yfinance as yf
 from twilio.rest import Client
+from bs4 import beautifulsoup4
 import requests
 
 app = FastAPI()
@@ -58,5 +59,6 @@ def whatsup():
     return {
         "Message sent:", message.sid
     }
+
 
 
