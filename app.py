@@ -51,11 +51,12 @@ def whatsup():
     
     client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
     message = client.messages.create(
-    body={'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20},
+    body=f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}",
     from_='whatsapp:+14155238886',  # Twilio sandbox number
     to='whatsapp:+919538505753'     # Your verified WhatsApp number
     )
     return {
         "Message sent:", message.sid
     }
+
 
