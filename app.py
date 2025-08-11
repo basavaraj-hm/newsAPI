@@ -1,8 +1,9 @@
+import requests
 from fastapi import FastAPI
 import yfinance as yf
 from twilio.rest import Client
 from bs4 import beautifulsoup4
-import requests
+
 
 app = FastAPI()
 def get_stock_price(symbol):
@@ -29,6 +30,18 @@ def alert(symbol: str):
     }
 @app.get("/whatsup")
 def whatsup():
+    
+    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
+    message = client.messages.create(
+    body="whats app message is delevered",
+    from_='whatsapp:+14155238886',  # Twilio sandbox number
+    to='whatsapp:+919538505753'     # Your verified WhatsApp number
+    )
+    return {
+        "Message sent:", message.sid
+    }
+@app.get("newsgold")
+def newsgold():
     # URL of the gold rate page
     url = "https://www.goodreturns.in/gold-rates/"
 
@@ -43,22 +56,7 @@ def whatsup():
     rows = table.find_all("tr")
 
     # Print header
-    #print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
-
-
-
-
-
-    
-    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '1ef448aa5bf253010ac7714cb2dbb60b')
-    message = client.messages.create(
-    body=f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}",
-    from_='whatsapp:+14155238886',  # Twilio sandbox number
-    to='whatsapp:+919538505753'     # Your verified WhatsApp number
-    )
     return {
-        "Message sent:", message.sid
+    print(f"{'City':<15} {'22K Gold (₹/10g)':<20} {'24K Gold (₹/10g)':<20}")
     }
-
-
 
