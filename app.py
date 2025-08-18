@@ -61,7 +61,7 @@ def newsgold():
         '''
         
         
-        url = 'https://www.google.com'
+        url = 'https://www.google.com/search?q=gold+rate&sca_esv=5ae40a1c31d56792&sxsrf=AE3TifO1Uomi8dgSG_mz8HjtedIBMADYvQ%3A1755506351353&source=hp&ei=r-aiaOeFE_Xe2roPm-Oy-Qw&iflsig=AOw8s4IAAAAAaKL0vwQcYjsLrmOhH6lohnT7irRSLA_g&ved=0ahUKEwinmeLj-pOPAxV1r1YBHZuxLM8Q4dUDCBo&uact=5&oq=gold+rate&gs_lp=Egdnd3Mtd2l6Iglnb2xkIHJhdGUyChAjGIAEGCcYigUyChAjGIAEGCcYigUyCxAAGIAEGJECGIoFMgsQABiABBiRAhiKBTIIEAAYgAQYsQMyBRAAGIAEMggQABiABBixAzIFEAAYgAQyCBAAGIAEGLEDMgUQABiABEj8KVDtEFiuHXABeACQAQCYAagBoAGVCKoBAzMuNrgBA8gBAPgBAZgCCqACzgioAgrCAgcQIxgnGOoCwgILEAAYgAQYsQMYgwHCAhEQLhiABBixAxjRAxiDARjHAcICDhAAGIAEGJECGLEDGIoFwgIIEC4YgAQYsQPCAg4QLhiABBixAxjRAxjHAZgDCfEFkr1_CVQ5dd-SBwMyLjigB8pNsgcDMS44uAfFCMIHBTAuMS45yAcl&sclient=gws-wiz'
 
         # Send a GET request to the webpage
         response = requests.get(url, timeout=10)
@@ -72,10 +72,10 @@ def newsgold():
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Example: Extract all paragraph texts
-        paragraphs = soup.find_all('div')
-        for div in paragraphs:
-            print(div.text)
-            print("loop in")
+        paragraphs = soup.find_all('span')
+        for span in paragraphs:
+            print(span.text)
+            
 
 
     except requests.exceptions.RequestException as e:
@@ -87,6 +87,7 @@ def newsgold():
 
 
     
+
 
 
 
