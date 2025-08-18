@@ -46,7 +46,7 @@ def newsgold():
     try:
         
         
-        
+        '''
         url = "https://www.google.com/search?q=gold+rate+today&sca_esv=18be89dfcaae8ca6&sxsrf=AE3TifOhXFnb47OyKpMa10UNi5A-c7XliA%3A1754996211492&source=hp&ei=8x2baPvNG96XnesPkoiHUQ&iflsig=AOw8s4IAAAAAaJssA4s45mCRR9W4ph94b7CigWv_pIux&oq=gold+&gs_lp=Egdnd3Mtd2l6IgVnb2xkICoCCAAyChAjGIAEGCcYigUyChAjGIAEGCcYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyChAAGIAEGEMYigUyCxAAGIAEGJECGIoFMgUQABiABEikG1CbBFjCCXABeACQAQCYAZIBoAGSBaoBAzAuNbgBAcgBAPgBAZgCBqACzAWoAgrCAgcQIxgnGOoCwgILEAAYgAQYsQMYgwHCAhEQABiABBiRAhixAxiDARiKBcICEBAAGIAEGLEDGEMYgwEYigWYAxDxBc4SPqTfLGHekgcDMS41oAf9KbIHAzAuNbgHvAXCBwUyLTQuMsgHLw&sclient=gws-wiz"  
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
@@ -58,6 +58,22 @@ def newsgold():
         print(soup.body.string if soup.body else "No body found")
         print(soup.header.string if soup.heaader else "No header found")
         print(soup.find("in Bengaluru is"))
+        '''
+        
+        
+        url = 'https://google.com'
+
+        # Send a GET request to the webpage
+        response = requests.get(url)
+
+        # Parse the HTML content using BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Example: Extract all paragraph texts
+        paragraphs = soup.find_all('p')
+        for p in paragraphs:
+            print(p.text)
+
 
     except requests.exceptions.RequestException as e:
         
@@ -68,6 +84,7 @@ def newsgold():
 
 
     
+
 
 
 
