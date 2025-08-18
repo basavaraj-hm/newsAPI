@@ -72,9 +72,9 @@ def newsgold():
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Example: Extract all paragraph texts
-        paragraphs = soup.find_all('div')
-        for div in paragraphs:
-            print(div.get('class'))
+        paragraphs = soup.find_all('span')
+        for span in paragraphs:
+            print(span.text)
             
 
 
@@ -87,6 +87,7 @@ def newsgold():
 
 
     
+
 
 
 
