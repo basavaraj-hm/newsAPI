@@ -61,18 +61,21 @@ def newsgold():
         '''
         
         
-        url = 'https://google.com'
+        url = 'https://www.google.com'
 
         # Send a GET request to the webpage
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        print("Status Code:", response.status_code)
 
         # Parse the HTML content using BeautifulSoup
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Example: Extract all paragraph texts
-        paragraphs = soup.find_all('p')
-        for p in paragraphs:
-            print(p.text)
+        paragraphs = soup.find_all('div')
+        for div in paragraphs:
+            print(div.text)
+            print("loop in")
 
 
     except requests.exceptions.RequestException as e:
@@ -84,6 +87,7 @@ def newsgold():
 
 
     
+
 
 
 
