@@ -73,6 +73,8 @@ def newsgold():
         
         # Example: Extract all paragraph texts
         paragraphs = soup.find_all('span')
+        for span in paragraphs:
+            print(span.text)
         
         for i, span in enumerate(paragraphs, start=1):
             print(f"Span {i} text:", span.text)
