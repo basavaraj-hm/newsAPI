@@ -70,12 +70,15 @@ def newsgold():
 
         # Parse the HTML content using BeautifulSoup
         soup = BeautifulSoup(response.text, 'html.parser')
-
+        
         # Example: Extract all paragraph texts
         paragraphs = soup.find_all('span')
         for span in paragraphs:
             print(span.text)
-            
+        
+        # Print the text of each span
+        for i, span in enumerate(paragraphs, start=1):
+            print(f"Span {i} text:", span.text)
 
 
     except requests.exceptions.RequestException as e:
@@ -87,6 +90,7 @@ def newsgold():
 
 
     
+
 
 
 
