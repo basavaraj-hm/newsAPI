@@ -76,6 +76,7 @@ def newsgold():
         for span in paragraphs:
             print(span.text)
         
+        # Print the text of each span
         for i, span in enumerate(paragraphs, start=1):
             print(f"Span {i} text:", span.text)
 
@@ -89,6 +90,7 @@ def newsgold():
 
 
     
+
 
 
 
