@@ -74,7 +74,7 @@ def newsgold():
         # Example: Extract all paragraph texts
         paragraphs = soup.find_all('div')
         for div in paragraphs:
-            print(div.text)
+            print(div.class)
             
 
 
@@ -87,6 +87,7 @@ def newsgold():
 
 
     
+
 
 
 
