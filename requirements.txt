@@ -4,4 +4,6 @@ yfinance
 requests
 twilio
 beautifulsoup4
+nsepy
+
 
