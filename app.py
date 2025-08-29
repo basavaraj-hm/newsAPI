@@ -86,9 +86,9 @@ def newsgold():
         
         print("Connection failed:", e)
        
-@app.get("/nseprice")
+@app.get("/nseprice/{symbol}")
 def nseprice():
-    symbol = "RELIANCE"
+    #symbol = "RELIANCE"
     '''
     try:
         data = nse_eq(symbol)
@@ -115,6 +115,7 @@ def nseprice():
 
 
     
+
 
 
 
