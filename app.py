@@ -90,11 +90,12 @@ def newsgold():
 @app.get("/nseprice")
 def nseprice():
     data = get_history(symbol="SBIN", start=date(2015,1,1), end=date(2015,1,31))
-    print(data[['Close']].plot())
+    print("succes")
     
 
 
     
+
 
 
 
