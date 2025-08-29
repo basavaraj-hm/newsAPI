@@ -108,7 +108,7 @@ def nseprice(symbol: str):
         else:
             print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
         return {
-            symbol: {last_price}
+            symbol: data
         }
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
@@ -118,6 +118,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
