@@ -87,7 +87,7 @@ def newsgold():
         print("Connection failed:", e)
        
 @app.get("/nseprice/{symbol}")
-def nseprice():
+def nseprice(symbol: str):
     #symbol = "RELIANCE"
     '''
     try:
@@ -107,6 +107,9 @@ def nseprice():
             print(f"Last price of {symbol}: ₹{last_price}")
         else:
             print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
+        return {
+            symbol: {last_price}
+        }
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
 
@@ -115,6 +118,7 @@ def nseprice():
 
 
     
+
 
 
 
