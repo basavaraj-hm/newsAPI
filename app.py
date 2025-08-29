@@ -91,7 +91,7 @@ def nseprice():
     symbol = "RELIANCE"
     try:
         data = nse_eq(symbol)
-        if data and 'lastPrice' in data:
+        if 'lastPrice' in data:
             print(f"Last price of {symbol}: {data['lastPrice']}")
         else:
             print(f"'lastPrice' not found in response for {symbol}. Full response: {data}")
@@ -103,6 +103,7 @@ def nseprice():
 
 
     
+
 
 
 
