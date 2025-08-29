@@ -86,8 +86,7 @@ def newsgold():
     except requests.exceptions.RequestException as e:
         
         print("Connection failed:", e)
-
-        
+       
 @app.get("/nseprice")
 def nseprice():
     data = get_history(symbol="SBIN", start=date(2015,1,1), end=date(2015,1,31))
@@ -96,6 +95,7 @@ def nseprice():
 
 
     
+
 
 
 
