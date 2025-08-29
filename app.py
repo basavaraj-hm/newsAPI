@@ -89,6 +89,7 @@ def newsgold():
 @app.get("/nseprice")
 def nseprice():
     symbol = "RELIANCE"
+    '''
     try:
         data = nse_eq(symbol)
         if 'lastPrice' in data:
@@ -97,12 +98,24 @@ def nseprice():
             print(f"'lastPrice' not found in response for {symbol}. Full response: {data}")
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
+    '''
+    
+    try:
+        data = nse_eq(symbol)
+        last_price = data.get("priceInfo", {}).get("lastPrice", None)
+        if last_price is not None:
+            print(f"Last price of {symbol}: ₹{last_price}")
+        else:
+            print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
 
 
     
 
 
     
+
 
 
 
