@@ -3,6 +3,8 @@ from fastapi import FastAPI
 import yfinance as yf
 from twilio.rest import Client
 from bs4 import BeautifulSoup
+from datetime import date
+from nsepy import get_history
 
 
 app = FastAPI()
@@ -86,10 +88,15 @@ def newsgold():
         print("Connection failed:", e)
 
         
-
+@app.get("/nseprice")
+def nseprice():
+    data = get_history(symbol="SBIN", start=date(2015,1,1), end=date(2015,1,31))
+    print(data[['Close']].plot())
+    
 
 
     
+
 
 
 
