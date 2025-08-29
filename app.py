@@ -88,13 +88,22 @@ def newsgold():
        
 @app.get("/nseprice")
 def nseprice():
-    price = nse_eq("RELIANCE")
-    print(price["lastPrice"])
+    symbol = "RELIANCE"
+    try:
+        data = nse_eq(symbol)
+        if data and 'lastPrice' in data:
+            print(f"Last price of {symbol}: {data['lastPrice']}")
+        else:
+            print(f"'lastPrice' not found in response for {symbol}. Full response: {data}")
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
+
 
     
 
 
     
+
 
 
 
