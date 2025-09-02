@@ -32,7 +32,7 @@ def alert(symbol: str):
 @app.get("/whatsup")
 def whatsup():
     
-    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', 'a05767c6d3e92dfaa8184371932c6f01')
+    client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '31a95eaf36ddbdcd8de51c32b94aca79')
     message = client.messages.create(
     body="whats app message is delevered",
     from_='whatsapp:+14155238886',  # Twilio sandbox number
@@ -124,6 +124,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
