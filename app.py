@@ -33,12 +33,12 @@ def fetch_price():
     symbol = "RELIANCE"
     last_price = 2523.75  # Replace with actual logic
     print(f"Last price of {symbol}: ₹{last_price} at {time.strftime('%H:%M:%S')}")
-
+'''
 # Set up scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(fetch_price, 'interval', seconds=3600)
 scheduler.start()
-
+'''
 
 def get_stock_price(symbol):
     stock = yf.Ticker(symbol)
@@ -157,6 +157,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
