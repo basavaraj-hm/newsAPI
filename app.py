@@ -36,7 +36,7 @@ def fetch_price():
 
 # Set up scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(fetch_price, 'interval', seconds=5)
+scheduler.add_job(fetch_price, 'interval', seconds=3600)
 scheduler.start()
 
 
@@ -157,6 +157,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
