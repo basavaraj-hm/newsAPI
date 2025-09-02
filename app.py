@@ -109,7 +109,7 @@ def nseprice(symbol: str):
             print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
         client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', 'a05767c6d3e92dfaa8184371932c6f01')
         message = client.messages.create(
-        body=data,
+        body="Last price of {symbol}: ₹{last_price}",
         from_='whatsapp:+14155238886',  # Twilio sandbox number
         to='whatsapp:+919538505753'     # Your verified WhatsApp number
     )
@@ -124,6 +124,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
