@@ -4,9 +4,42 @@ import yfinance as yf
 from twilio.rest import Client
 from bs4 import BeautifulSoup
 from nsepython import *
+from apscheduler.schedulers.background import BackgroundScheduler
+import time
+
 
 
 app = FastAPI()
+
+
+def fetch_price():
+    try:
+        symbol="NIITLTD"
+        data = nse_eq(symbol)
+        last_price = data.get("priceInfo", {}).get("lastPrice", None)
+        if last_price is not None:
+            print(f"Last price of {symbol}: ₹{last_price}")
+        else:
+            print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
+        client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '31a95eaf36ddbdcd8de51c32b94aca79')
+        message = client.messages.create(
+        body=f"Last price of {symbol}: ₹{last_price}",
+        from_='whatsapp:+14155238886',  # Twilio sandbox number
+        to='whatsapp:+919538505753'     # Your verified WhatsApp number
+    )
+       
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
+    symbol = "RELIANCE"
+    last_price = 2523.75  # Replace with actual logic
+    print(f"Last price of {symbol}: ₹{last_price} at {time.strftime('%H:%M:%S')}")
+
+# Set up scheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(fetch_price, 'interval', seconds=5)
+scheduler.start()
+
+
 def get_stock_price(symbol):
     stock = yf.Ticker(symbol)
     data = stock.history(period="1d", interval="1m")
@@ -124,6 +157,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
