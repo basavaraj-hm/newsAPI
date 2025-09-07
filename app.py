@@ -15,7 +15,8 @@ app = FastAPI()
 def fetch_price():
     try:
         symbol="NIITLTD"
-        data = nse_eq(symbol)
+        #data = nse_eq(symbol)
+        data = nse_fno(symbol)
         last_price = data.get("priceInfo", {}).get("lastPrice", None)
         if last_price is not None:
             print(f"Last price of {symbol}: ₹{last_price}")
@@ -33,6 +34,14 @@ def fetch_price():
     symbol = "RELIANCE"
     last_price = 2523.75  # Replace with actual logic
     print(f"Last price of {symbol}: ₹{last_price} at {time.strftime('%H:%M:%S')}")
+@app.get("/newsautomate")
+def news_automate():
+    url = f"https://api.marketaux.com/v1/news/all?symbols=AAPL,TSLA&filter_entities=true&api_token=uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd"
+    response = requests.get(url)
+    articles = response.json().get("articles", [])
+    return {
+        "value":articles
+    }
 '''
 # Set up scheduler
 scheduler = BackgroundScheduler()
@@ -134,7 +143,8 @@ def nseprice(symbol: str):
     '''
     
     try:
-        data = nse_eq(symbol)
+        #data = nse_eq(symbol)
+        data = nse_fno(symbol)
         last_price = data.get("priceInfo", {}).get("lastPrice", None)
         if last_price is not None:
             print(f"Last price of {symbol}: ₹{last_price}")
@@ -157,6 +167,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
