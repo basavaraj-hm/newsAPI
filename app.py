@@ -46,7 +46,7 @@ def news_automate():
 
     params = urllib.parse.urlencode({
     'api_token': 'uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd',
-    'symbols': 'AAPL,TSLA',
+    'symbols': 'SBIN,TSLA',
     'limit': 50,
     })
 
@@ -56,6 +56,9 @@ def news_automate():
     data = res.read()
 
     print(data.decode('utf-8'))
+    return {
+        "values":data
+    }
     
 '''
 # Set up scheduler
@@ -182,6 +185,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
