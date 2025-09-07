@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from nsepython import *
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
+import http.client, urllib.parse
 
 
 
@@ -36,12 +37,26 @@ def fetch_price():
     print(f"Last price of {symbol}: ₹{last_price} at {time.strftime('%H:%M:%S')}")
 @app.get("/newsautomate")
 def news_automate():
+    '''
     url = f"https://api.marketaux.com/v1/news/all?symbols=AAPL,TSLA&filter_entities=true&api_token=uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd"
     response = requests.get(url)
     articles = response.json().get("articles", [])
-    return {
-        "value":articles
-    }
+    '''
+    conn = http.client.HTTPSConnection('api.marketaux.com')
+
+    params = urllib.parse.urlencode({
+    'api_token': 'uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd',
+    'symbols': 'AAPL,TSLA',
+    'limit': 50,
+    })
+
+    conn.request('GET', '/v1/news/all?{}'.format(params))
+
+    res = conn.getresponse()
+    data = res.read()
+
+    print(data.decode('utf-8'))
+    
 '''
 # Set up scheduler
 scheduler = BackgroundScheduler()
@@ -167,6 +182,7 @@ def nseprice(symbol: str):
 
 
     
+
 
 
 
