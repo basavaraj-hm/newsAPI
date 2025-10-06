@@ -7,6 +7,13 @@ from nsepython import *
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 import http.client, urllib.parse
+import scrapy
+from scrapy.crawler import CrawlerRunner
+from scrapy.utils.log import configure_logging
+from twisted.internet import reactor, defer
+import json
+from io import StringIO
+from contextlib import redirect_stdout
 
 
 
@@ -182,11 +189,62 @@ def nseprice(symbol: str):
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
 
+# A simple Scrapy spider to scrape quotes
+class SimpleQuotesSpider(scrapy.Spider):
+    name = "simple_quotes"
+    start_urls = ["https://quotes.toscrape.com/"]
+    custom_settings = {
+        'LOG_LEVEL': 'INFO',  # Reduce log verbosity for clarity
+        'FEEDS': {
+            'quotes.json': {'format': 'json', 'overwrite': True},
+        },
+    }
+
+    def parse(self, response):
+        for quote in response.css("div.quote"):
+            yield {
+                "text": quote.css("span.text::text").get(),
+                "author": quote.css("small.author::text").get(),
+            }
+
+def run_spider_and_get_results():
+    """Runs the spider and returns the results."""
+    # Use StringIO to capture the log output, preventing it from flooding the console
+    log_capture = StringIO()
+    with redirect_stdout(log_capture):
+        configure_logging(install_root_handler=False)
+        # Use CrawlerRunner to run the spider inline
+        runner = CrawlerRunner()
+        @defer.inlineCallbacks
+        def crawl():
+            yield runner.crawl(SimpleQuotesSpider)
+            reactor.stop()
+
+        crawl()
+        # Start the Twisted reactor
+        reactor.run()
+    
+    # Read the results from the output file created by the spider
+    with open("quotes.json", "r") as f:
+        data = json.load(f)
+    return data
+
+@app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
+def scrape_quotes():
+    """
+    Triggers the scraper and returns the results once scraping is complete.
+    
+    **Note**: This is a simplified, blocking example. The API will not return a response
+    until the scraping task is finished.
+    """
+    results = run_spider_and_get_results()
+    return {"status": "success", "data": results}
 
     
 
 
     
+
 
 
 
