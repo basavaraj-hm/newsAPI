@@ -6,7 +6,8 @@ twilio
 beautifulsoup4
 nsepython
 apscheduler
-scarpy
+Scarpy
+
 
 
 
