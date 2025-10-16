@@ -1,3 +1,7 @@
+import sys
+from twisted.internet import asyncioreactor
+asyncioreactor.install()
+
 import requests
 from fastapi import FastAPI
 import yfinance as yf
@@ -10,11 +14,11 @@ import http.client, urllib.parse
 import scrapy
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
-from twisted.internet import reactor, defer
+from twisted.internet import defer
+from twisted.internet.task import ensureDeferred
 import json
 from io import StringIO
 from contextlib import redirect_stdout
-from twisted.internet.task import ensureDeferred
 
 
 
@@ -243,6 +247,7 @@ async def scrape_quotes():
 
 
     
+
 
 
 
