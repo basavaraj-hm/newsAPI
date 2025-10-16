@@ -14,6 +14,7 @@ from twisted.internet import reactor, defer
 import json
 from io import StringIO
 from contextlib import redirect_stdout
+from twisted.internet.task import ensureDeferred
 
 
 
@@ -207,7 +208,7 @@ class SimpleQuotesSpider(scrapy.Spider):
                 "author": quote.css("small.author::text").get(),
             }
 
-def run_spider_and_get_results():
+async def run_spider_and_get_results():
     """Runs the spider and returns the results."""
     # Use StringIO to capture the log output, preventing it from flooding the console
     log_capture = StringIO()
@@ -218,11 +219,9 @@ def run_spider_and_get_results():
         @defer.inlineCallbacks
         def crawl():
             yield runner.crawl(SimpleQuotesSpider)
-            reactor.stop()
+            
 
-        crawl()
-        # Start the Twisted reactor
-        reactor.run()
+        await ensureDeferred(crawl())
     
     # Read the results from the output file created by the spider
     with open("quotes.json", "r") as f:
@@ -230,20 +229,21 @@ def run_spider_and_get_results():
     return data
 
 @app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
-def scrape_quotes():
+async def scrape_quotes():
     """
     Triggers the scraper and returns the results once scraping is complete.
     
     **Note**: This is a simplified, blocking example. The API will not return a response
     until the scraping task is finished.
     """
-    results = run_spider_and_get_results()
+    results = await run_spider_and_get_results()
     return {"status": "success", "data": results}
 
     
 
 
     
+
 
 
 
