@@ -1,5 +1,5 @@
 from twisted.internet import asyncioreactor
-asyncioreactor.install()  # Integrate Twisted with asyncio
+asyncioreactor.install()
 
 from fastapi import FastAPI
 import scrapy
@@ -19,10 +19,26 @@ class QuotesSpider(scrapy.Spider):
         'FEEDS': {
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
-        'TELNETCONSOLE_ENABLED': False  # Disable Telnet console
+        'TELNETCONSOLE_ENABLED': False
     }
-    data from JSON file
+
+    ---------------- RUN SPIDER AND RETURN RESULTS ----------------
+async def run_spider_and_get_results():
+    configure_logging(install_root_handler=False)
+    runner = CrawlerRunner()
+    await ensureDeferred(runner.crawl(QuotesSpider))  # ✅ Correct usage
+
+    # Read data from JSON file after spider completes
     with open("quotes.json", "r") as f:
         data = json.load(f)
-    twisted
+    return data
 
+# ---------------- FASTAPI ENDPOINT ----------------
+@app.get("/scrape")
+async def scrape_quotes():
+    try:
+        
+        results = await run_spider_and_get_results()
+        return {"status": "success", "data": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
