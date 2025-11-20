@@ -1,33 +1,26 @@
-import scrapy
-
-class QuotesSpider(scrapy.Spider):
-    name = "quotes"
-    start_urls = ["http://quotes.toscrape.com"]
-
-    def parse(self, response):
-        for quote in response.css("div.quote"):
-           .crawler import CrawlerProcess
-from scrapy.utils.project import get_project_settings
-from quotes_spider import QuotesSpider
+from fastapi import FastAPI, Query
+from scrapy.crawler import CrawlerProcess
+from dynamic_spider import DynamicSpider
 
 app = FastAPI()
 
 @app.get("/scrape")
-def scrape_quotes():
+def scrape_dynamic(url: str = Query(..., description="URL to scrape")):
     scraped_data = []
 
-    # Define a custom pipeline to collect data
+    # Custom pipeline to collect items
     class CollectPipeline:
         def process_item(self, item, spider):
             scraped_data.append(item)
             return item
 
+    # Configure and run Scrapy inside FastAPI
     process = CrawlerProcess(settings={
         "LOG_ENABLED": False,
         "ITEM_PIPELINES": { '__main__.CollectPipeline': 1 }
     })
 
-    process.crawl(QuotesSpider)
+    process.crawl(DynamicSpider, url=url)
     process.start()  # Blocks until spider finishes
 
-    return {"quotes": scraped_data}
+    return {"scraped_url": url, "data": scraped_data}
