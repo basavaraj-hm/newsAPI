@@ -108,6 +108,7 @@ class SimpleQuotesSpider(scrapy.Spider):
         'FEEDS': {
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
+        'TELNETCONSOLE_ENABLED': False
     }
 
     def parse(self, response):
@@ -135,5 +136,6 @@ async def scrape_quotes():
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 
 
