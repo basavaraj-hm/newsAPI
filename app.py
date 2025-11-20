@@ -20,7 +20,9 @@ class QuotesSpider(scrapy.Spider):
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
         'TELNETCONSOLE_ENABLED': False  # Disable Telnet console
+    }
     data from JSON file
     with open("quotes.json", "r") as f:
         data = json.load(f)
     twisted
+
