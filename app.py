@@ -220,12 +220,8 @@ async def run_spider_and_get_results():
         configure_logging(install_root_handler=False)
         # Use CrawlerRunner to run the spider inline
         runner = CrawlerRunner()
-        @defer.inlineCallbacks
-        def crawl():
-            yield runner.crawl(SimpleQuotesSpider)
-            
-
-        await ensureDeferred(crawl())
+        await ensureDeferred(runner.crawl(SimpleQuotesSpider))
+        
     
     # Read the results from the output file created by the spider
     with open("quotes.json", "r") as f:
@@ -240,13 +236,17 @@ async def scrape_quotes():
     **Note**: This is a simplified, blocking example. The API will not return a response
     until the scraping task is finished.
     """
-    results = await run_spider_and_get_results()
-    return {"status": "success", "data": results}
+    try:
+        results = await run_spider_and_get_results()
+        return {"status": "success", "data": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
     
 
 
     
+
 
 
 
