@@ -11,7 +11,7 @@ from nsepython import *
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 import http.client, urllib.parse
- scrapy
+import scrapy
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 from twisted.internet.task import ensureDeferred
@@ -135,3 +135,4 @@ async def scrape_quotes():
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
