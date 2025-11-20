@@ -22,7 +22,6 @@ class SimpleQuotesSpider(scrapy.Spider):
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
         'TELNETCONSOLE_ENABLED': False  # ✅ Prevent Twisted Telnet issues
-        await ensureDeferred(runner.crawl(SimpleQuotesSpider))
     }
     
     
@@ -31,11 +30,21 @@ class SimpleQuotesSpider(scrapy.Spider):
         return data
 
 
+async def run_spider_and_get_results():
+    """Runs the Scrapy spider and returns the scraped results."""
+    configure_logging(install_root_handler=False)
+    runner = CrawlerRunner()
+    await ensureDeferred(runner.crawl(SimpleQuotesSpider))  # ✅ Correct usage
+
+
+
 # ---------------- FASTAPI ENDPOINT ----------------
 @app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
 async def scrape_quotes():
     try:
+        results = await run_spider_and_get_results()
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 
