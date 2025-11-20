@@ -1,8 +1,6 @@
-import sys
 from twisted.internet import asyncioreactor
-asyncioreactor.install()
+asyncioreactor.install()  # Integrate Twisted with asyncio
 
-import requests
 from fastapi import FastAPI
 import scrapy
 from scrapy.crawler import CrawlerRunner
@@ -13,38 +11,16 @@ import json
 app = FastAPI()
 
 # ---------------- SCRAPY SPIDER ----------------
-class SimpleQuotesSpider(scrapy.Spider):
-    name = "simple_quotes"
+class QuotesSpider(scrapy.Spider):
+    name = "quotes"
     start_urls = ["https://quotes.toscrape.com/"]
     custom_settings = {
         'LOG_LEVEL': 'INFO',
         'FEEDS': {
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
-        'TELNETCONSOLE_ENABLED': False  # ✅ Prevent Twisted Telnet issues
-    }
-    
-    
+        'TELNETCONSOLE_ENABLED': False  # Disable Telnet console
+    data from JSON file
     with open("quotes.json", "r") as f:
         data = json.load(f)
-        return data
-
-
-async def run_spider_and_get_results():
-    """Runs the Scrapy spider and returns the scraped results."""
-    configure_logging(install_root_handler=False)
-    runner = CrawlerRunner()
-    await ensureDeferred(runner.crawl(SimpleQuotesSpider))  # ✅ Correct usage
-
-
-
-# ---------------- FASTAPI ENDPOINT ----------------
-@app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
-async def scrape_quotes():
-    try:
-        results = await run_spider_and_get_results()
-        return {"status": "success", "data": results}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
+    twisted
