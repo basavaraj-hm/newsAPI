@@ -128,11 +128,12 @@ async def run_spider_and_get_results():
         data = json.load(f)
     return data
 
-@app("/scrape", summary="Scrape quotes from quotes.toscrape.com")
+@app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
 async def scrape_quotes():
     try:
         results = await run_spider_and_get_results()
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 
