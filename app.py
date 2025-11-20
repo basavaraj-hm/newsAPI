@@ -22,7 +22,6 @@ class QuotesSpider(scrapy.Spider):
         'TELNETCONSOLE_ENABLED': False
     }
 
-    ---------------- RUN SPIDER AND RETURN RESULTS ----------------
 async def run_spider_and_get_results():
     configure_logging(install_root_handler=False)
     runner = CrawlerRunner()
@@ -42,3 +41,4 @@ async def scrape_quotes():
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
