@@ -114,8 +114,7 @@ class SimpleQuotesSpider(scrapy.Spider):
     def parse(self, response):
         for quote in response.css("div.quote"):
             yield {
-                "text": quote.css("span.text::text").get(),
-                "author": quote.css("small.author::text").get(),
+                "text": quote.css("span.text::text").get()
             }
 
 # ✅ Corrected Scrapy integration
@@ -136,6 +135,7 @@ async def scrape_quotes():
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 
 
 
