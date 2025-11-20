@@ -27,18 +27,15 @@ class SimpleQuotesSpider(scrapy.Spider):
     def parse(self, response):
         for quote in response.css("div.quote"):
             yield {
-                run_spider_and_get_results():
-    """Runs the Scrapy spider and returns the scraped results."""
-    configure_logging(install_root_handler=False)
-    runner = CrawlerRunner()
-    await ensureDeferred(runner.crawl(SimpleQuotesSpider))  # ✅ Correct usage
+                "text": quote.css("span.text::text").get(),
+                "author": quote.css("small.author::text").get()
+            }
 
-    # Read the results from the output file created by the spider
-    with open("quotes.json", "r") as f:
-        data = json.load(f)
+# ---------------- RUN SPIDER AND RETURN RESULTS ----------------
+async        data = json.load(f)
     return data
 
-# ✅ FastAPI endpoint
+# ---------------- FASTAPI ENDPOINT ----------------
 @app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
 async def scrape_quotes():
     try:
