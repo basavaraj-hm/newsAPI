@@ -11,24 +11,19 @@ from nsepython import *
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 import http.client, urllib.parse
-import scrapy
+ scrapy
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
-from twisted.internet import defer
 from twisted.internet.task import ensureDeferred
 import json
 from io import StringIO
 from contextlib import redirect_stdout
 
-
-
 app = FastAPI()
-
 
 def fetch_price():
     try:
-        symbol="NIITLTD"
-        #data = nse_eq(symbol)
+        symbol = "NIITLTD"
         data = nse_fno(symbol)
         last_price = data.get("priceInfo", {}).get("lastPrice", None)
         if last_price is not None:
@@ -37,169 +32,79 @@ def fetch_price():
             print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
         client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '31a95eaf36ddbdcd8de51c32b94aca79')
         message = client.messages.create(
-        body=f"Last price of {symbol}: ₹{last_price}",
-        from_='whatsapp:+14155238886',  # Twilio sandbox number
-        to='whatsapp:+919538505753'     # Your verified WhatsApp number
-    )
-       
+            body=f"Last price of {symbol}: ₹{last_price}",
+            from_='whatsapp:+14155238886',
+            to='whatsapp:+919538505753'
+        )
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
     symbol = "RELIANCE"
-    last_price = 2523.75  # Replace with actual logic
+    last_price = 2523.75
     print(f"Last price of {symbol}: ₹{last_price} at {time.strftime('%H:%M:%S')}")
+
 @app.get("/newsautomate")
 def news_automate():
-    '''
-    url = f"https://api.marketaux.com/v1/news/all?symbols=AAPL,TSLA&filter_entities=true&api_token=uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd"
-    response = requests.get(url)
-    articles = response.json().get("articles", [])
-    '''
     conn = http.client.HTTPSConnection('api.marketaux.com')
-
     params = urllib.parse.urlencode({
-    'api_token': 'uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd',
-    'symbols': 'SBIN,TSLA',
-    'limit': 50,
+        'api_token': 'uaa7ghJ7d0D8HOYnEPafuj8gl9yROR7JRDKgXEPd',
+        'symbols': 'SBIN,TSLA',
+        'limit': 50,
     })
-
     conn.request('GET', '/v1/news/all?{}'.format(params))
-
     res = conn.getresponse()
     data = res.read()
-
     print(data.decode('utf-8'))
     return {
-        "values":data
+        "values": data
     }
-    
-'''
-# Set up scheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(fetch_price, 'interval', seconds=3600)
-scheduler.start()
-'''
 
-def get_stock_price(symbol):
-    stock = yf.Ticker(symbol)
-    data = stock.history(period="1d", interval="1m")
-    if not data.empty:
-        return data['Close'].iloc[-1]
-    return None
-
-def get_news(symbol):
-    url = f"https://newsapi.org/v2/everything?q={symbol}&sortBy=publishedAt&apiKey=fdf85b10d39a4f9f82f95ca9255ba43f"
-    response = requests.get(url)
-    articles = response.json().get("articles", [])
-    return articles[:3]
-
-@app.get("/alert/{symbol}")
-def alert(symbol: str):
-    price = get_stock_price(symbol)
-    news = get_news(symbol)
-    return {
-        "symbol": symbol,
-        "price": price,
-        "news": news
-    }
 @app.get("/whatsup")
 def whatsup():
-    
     client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '31a95eaf36ddbdcd8de51c32b94aca79')
     message = client.messages.create(
-    body="whats app message is delevered",
-    from_='whatsapp:+14155238886',  # Twilio sandbox number
-    to='whatsapp:+919538505753'     # Your verified WhatsApp number
+        body="whats app message is delivered",
+        from_='whatsapp:+14155238886',
+        to='whatsapp:+919538505753'
     )
     return {
-        "Message sent:", message.sid
+        "Message sent": message.sid
     }
 
 @app.get("/newsgold")
 def newsgold():
     try:
-        
-        
-        '''
-        url = "https://www.google.com/search?q=gold+rate+today&sca_esv=18be89dfcaae8ca6&sxsrf=AE3TifOhXFnb47OyKpMa10UNi5A-c7XliA%3A1754996211492&source=hp&ei=8x2baPvNG96XnesPkoiHUQ&iflsig=AOw8s4IAAAAAaJssA4s45mCRR9W4ph94b7CigWv_pIux&oq=gold+&gs_lp=Egdnd3Mtd2l6IgVnb2xkICoCCAAyChAjGIAEGCcYigUyChAjGIAEGCcYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyDRAAGIAEGLEDGEMYigUyChAAGIAEGEMYigUyCxAAGIAEGJECGIoFMgUQABiABEikG1CbBFjCCXABeACQAQCYAZIBoAGSBaoBAzAuNbgBAcgBAPgBAZgCBqACzAWoAgrCAgcQIxgnGOoCwgILEAAYgAQYsQMYgwHCAhEQABiABBiRAhixAxiDARiKBcICEBAAGIAEGLEDGEMYgwEYigWYAxDxBc4SPqTfLGHekgcDMS41oAf9KbIHAzAuNbgHvAXCBwUyLTQuMsgHLw&sclient=gws-wiz"  
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
-        print("Connection successful!")
-        print("Status Code:", response.status_code)
-        
-        soup = BeautifulSoup(response.content, "html.parser")
-        print(soup.title.string if soup.title else "No title found")
-        print(soup.body.string if soup.body else "No body found")
-        print(soup.header.string if soup.heaader else "No header found")
-        print(soup.find("in Bengaluru is"))
-        '''
-        
-        
-        url = 'https://www.google.com/search?q=gold+rate&sca_esv=5ae40a1c31d56792&sxsrf=AE3TifO1Uomi8dgSG_mz8HjtedIBMADYvQ%3A1755506351353&source=hp&ei=r-aiaOeFE_Xe2roPm-Oy-Qw&iflsig=AOw8s4IAAAAAaKL0vwQcYjsLrmOhH6lohnT7irRSLA_g&ved=0ahUKEwinmeLj-pOPAxV1r1YBHZuxLM8Q4dUDCBo&uact=5&oq=gold+rate&gs_lp=Egdnd3Mtd2l6Iglnb2xkIHJhdGUyChAjGIAEGCcYigUyChAjGIAEGCcYigUyCxAAGIAEGJECGIoFMgsQABiABBiRAhiKBTIIEAAYgAQYsQMyBRAAGIAEMggQABiABBixAzIFEAAYgAQyCBAAGIAEGLEDMgUQABiABEj8KVDtEFiuHXABeACQAQCYAagBoAGVCKoBAzMuNrgBA8gBAPgBAZgCCqACzgioAgrCAgcQIxgnGOoCwgILEAAYgAQYsQMYgwHCAhEQLhiABBixAxjRAxiDARjHAcICDhAAGIAEGJECGLEDGIoFwgIIEC4YgAQYsQPCAg4QLhiABBixAxjRAxjHAZgDCfEFkr1_CVQ5dd-SBwMyLjigB8pNsgcDMS44uAfFCMIHBTAuMS45yAcl&sclient=gws-wiz'
-
-        # Send a GET request to the webpage
+        url = 'https://www.google.com/search?q=gold+rate'
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         print("Status Code:", response.status_code)
-
-        # Parse the HTML content using BeautifulSoup
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Example: Extract all paragraph texts
         paragraphs = soup.find_all('span')
-        for span in paragraphs:
-            print(span.text)
-        
-        # Print the text of each span
         for i, span in enumerate(paragraphs, start=1):
             print(f"Span {i} text:", span.text)
-
-
     except requests.exceptions.RequestException as e:
-        
         print("Connection failed:", e)
-       
+
 @app.get("/nseprice/{symbol}")
 def nseprice(symbol: str):
-    #symbol = "RELIANCE"
-    '''
     try:
-        data = nse_eq(symbol)
-        if 'lastPrice' in data:
-            print(f"Last price of {symbol}: {data['lastPrice']}")
-        else:
-            print(f"'lastPrice' not found in response for {symbol}. Full response: {data}")
-    except Exception as e:
-        print(f"Error fetching data for {symbol}: {e}")
-    '''
-    
-    try:
-        #data = nse_eq(symbol)
         data = nse_fno(symbol)
         last_price = data.get("priceInfo", {}).get("lastPrice", None)
         if last_price is not None:
             print(f"Last price of {symbol}: ₹{last_price}")
         else:
             print(f"'lastPrice' not found in priceInfo for {symbol}. Full priceInfo: {data.get('priceInfo')}")
-        '''
-        client = Client('AC81d4b9b02bcc2deb5580f9b988c17c04', '31a95eaf36ddbdcd8de51c32b94aca79')
-        message = client.messages.create(
-        body=f"Last price of {symbol}: ₹{last_price}",
-        from_='whatsapp:+14155238886',  # Twilio sandbox number
-        to='whatsapp:+919538505753'     # Your verified WhatsApp number
-    )
-    '''
         return {
             symbol: data
         }
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
 
-# A simple Scrapy spider to scrape quotes
+# Scrapy Spider
 class SimpleQuotesSpider(scrapy.Spider):
     name = "simple_quotes"
     start_urls = ["https://quotes.toscrape.com/"]
     custom_settings = {
-        'LOG_LEVEL': 'INFO',  # Reduce log verbosity for clarity
+        'LOG_LEVEL': 'INFO',
         'FEEDS': {
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
@@ -212,97 +117,21 @@ class SimpleQuotesSpider(scrapy.Spider):
                 "author": quote.css("small.author::text").get(),
             }
 
+# ✅ Corrected Scrapy integration
 async def run_spider_and_get_results():
-    """Runs the spider and returns the results."""
-    # Use StringIO to capture the log output, preventing it from flooding the console
-    log_capture = StringIO()
-    with redirect_stdout(log_capture):
-        configure_logging(install_root_handler=False)
-        # Use CrawlerRunner to run the spider inline
-        runner = CrawlerRunner()
-        await ensureDeferred(runner.crawl(SimpleQuotesSpider))
-        
-    
-    # Read the results from the output file created by the spider
+    """Runs the Scrapy spider and returns the scraped results."""
+    configure_logging(install_root_handler=False)
+    runner = CrawlerRunner()
+    await ensureDeferred(runner.crawl(SimpleQuotesSpider))  # ✅ Correct usage
+
     with open("quotes.json", "r") as f:
         data = json.load(f)
     return data
 
-@app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
+@app("/scrape", summary="Scrape quotes from quotes.toscrape.com")
 async def scrape_quotes():
-    """
-    Triggers the scraper and returns the results once scraping is complete.
-    
-    **Note**: This is a simplified, blocking example. The API will not return a response
-    until the scraping task is finished.
-    """
     try:
         results = await run_spider_and_get_results()
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
-    
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
