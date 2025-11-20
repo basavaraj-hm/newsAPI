@@ -1,44 +1,42 @@
-from twisted.internet import asyncioreactor
-asyncioreactor.install()
-
 from fastapi import FastAPI
-import scrapy
-from scrapy.crawler import CrawlerRunner
-from scrapy.utils.log import configure_logging
-from twisted.internet.task import ensureDeferred
-import json
+from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
+from twisted.internet import reactor
+from typing import List, Dict
+
+from my_spider import MySpider # Import your Scrapy spider
 
 app = FastAPI()
 
-# ---------------- SCRAPY SPIDER ----------------
-class QuotesSpider(scrapy.Spider):
-    name = "quotes"
-    start_urls = ["https://quotes.toscrape.com/"]
-    custom_settings = {
-        'LOG_LEVEL': 'INFO',
-        'FEEDS': {
-            'quotes.json': {'format': 'json', 'overwrite': True},
-        },
-        'TELNETCONSOLE_ENABLED': False
-    }
+# Store scraped data temporarily (in a real app, use a database)
+scraped_data = []
 
-async def run_spider_and_get_results():
-    configure_logging(install_root_handler=False)
-    runner = CrawlerRunner()
-    await ensureDeferred(runner.crawl(QuotesSpider))  # ✅ Correct usage
+class CustomCrawlerProcess(CrawlerProcess):
+    def crawl(self, crawler_or_spidercls, *args, **kwargs):
+        crawler = self.create_crawler(crawler_or_spidercls)
+        # Attach a signal to store items in scraped_data
+        crawler.signals.connect(self._item_scraped, signal=scrapy.signals.item_scraped)
+        return super().crawl(crawler, *args, **kwargs)
 
-    # Read data from JSON file after spider completes
-    with open("quotes.json", "r") as f:
-        data = json.load(f)
-    return data
+    def _item_scraped(self, item, spider):
+        scraped_data.append(dict(item))
 
-# ---------------- FASTAPI ENDPOINT ----------------
 @app.get("/scrape")
 async def scrape_quotes():
-    try:
-        
-        results = await run_spider_and_get_results()
-        return {"status": "success", "data": results}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    """Initiates the Scrapy spider to scrape quotes."""
+    global scraped_data
+    scraped_data = [] # Clear previous data
+    settings = get_project_settings()
+    process = CustomCrawlerProcess(settings)
+    process.crawl(MySpider)
+    # This runs the reactor in a non-blocking way for FastAPI
+    reactor.callFromThread(process.start)
+    return {"message": "Scraping initiated. Check /data after a short while."}
 
+@app.get("/data", response_model=List[Dict])
+async def get_scraped_data():
+    """Returns the currently scraped data."""
+    return scraped_data
+
+# To run the FastAPI application:
+# uvicorn main:app --reload
