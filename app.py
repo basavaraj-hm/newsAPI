@@ -22,24 +22,20 @@ class SimpleQuotesSpider(scrapy.Spider):
             'quotes.json': {'format': 'json', 'overwrite': True},
         },
         'TELNETCONSOLE_ENABLED': False  # ✅ Prevent Twisted Telnet issues
+        await ensureDeferred(runner.crawl(SimpleQuotesSpider))
     }
+    
+    
+    with open("quotes.json", "r") as f:
+        data = json.load(f)
+        return data
 
-    def parse(self, response):
-        for quote in response.css("div.quote"):
-            yield {
-                "text": quote.css("span.text::text").get(),
-                "author": quote.css("small.author::text").get()
-            }
-
-# ---------------- RUN SPIDER AND RETURN RESULTS ----------------
-async        data = json.load(f)
-    return data
 
 # ---------------- FASTAPI ENDPOINT ----------------
 @app.get("/scrape", summary="Scrape quotes from quotes.toscrape.com")
 async def scrape_quotes():
     try:
-        results = await run_spider_and_get_results()
         return {"status": "success", "data": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
