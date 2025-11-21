@@ -18,6 +18,7 @@ class QuotesSpider(Spider):
                 'author': quote.css('small.author::text').get()
             }
             scraped_data.append(item)
+            return item
 
 @app.get("/scrape")
 def scrape_quotes():
@@ -31,3 +32,4 @@ def scrape_quotes():
 
     threading.Thread(target=lambda: crawl() or reactor.run()).start()
     return {"message": "Scraping started", "scraped_url": "http://quotes.toscrape.com"}
+
