@@ -11,10 +11,15 @@ class QuotesSpider(Spider):
     name = "quotes"
     start_urls = ["http://quotes.toscrape.com"]
 
+    
     def parse(self, response):
-        process_item(self, item, spider):
+        item = {
+            'title': response.css('h1::text').get(),
+            'link': response.url
+        }
         scraped_data.append(item)
         return item
+
 
 @app.get("/scrape")
 def scrape_quotes():
@@ -27,3 +32,4 @@ def scrape_quotes():
         })
         process.crawl(QuotesSpider)
        aped_url": "http://quotes.toscrape.com", "data": scraped_data}
+
