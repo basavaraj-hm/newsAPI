@@ -31,5 +31,6 @@ def scrape_quotes():
             "ITEM_PIPELINES": { "app.CollectPipeline": 1 }
         })
         process.crawl(QuotesSpider)
-       aped_url": "http://quotes.toscrape.com", "data": scraped_data}
+        {"scraped_url": "http://quotes.toscrape.com", "data": scraped_data}
+
 
