@@ -1,8 +1,5 @@
 
-from fastapi import FastAPI
-from scrapy.spiders import Spider
-from scrapy.crawler import CrawlerRunner
-from twisted.internet import reactor, defer
+from fastapi import FastAPI, Request, Responsefrom twisted.internet import reactor, defer
 import threading
 from threading import Lock
 
@@ -41,7 +38,13 @@ def scrape_quotes():
 
     return {"message": "Scraping started", "scraped_url": "http://quotes.toscrape.com"}
 
-@app.get("/results")
-def get_results():
+# ✅ Add HEAD support
+@app.api_route("/results", methods=["GET", "HEAD"])
+def get_results(request: Request):
+    if request.method == "HEAD":
+        # Return only status code for HEAD request
+        return Response(status_code=200)
     with data_lock:
         return {"scraped_data": scraped_data}
+from scrapy.spiders import Spider
+from scrapy.crawler import CrawlerRunner
