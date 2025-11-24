@@ -4,9 +4,11 @@ from scrapy.spiders import Spider
 from scrapy.crawler import CrawlerRunner
 from twisted.internet import reactor, defer
 import threading
+from threading import Lock
 
 app = FastAPI()
 scraped_data = []
+data_lock = Lock()
 
 class QuotesSpider(Spider):
     name = "quotes"
@@ -18,8 +20,9 @@ class QuotesSpider(Spider):
                 'text': quote.css('span.text::text').get(),
                 'author': quote.css('small.author::text').get()
             }
-            scraped_data.append(item)
-            yield item  # ✅ Use yield instead of return
+            with data_lock:
+                scraped_data.append(item)
+            yield item
 
 @app.get("/scrape")
 def scrape_quotes():
@@ -31,7 +34,6 @@ def scrape_quotes():
         yield runner.crawl(QuotesSpider)
         reactor.stop()
 
-    # ✅ Check if reactor is running
     if not reactor.running:
         threading.Thread(target=lambda: crawl() or reactor.run()).start()
     else:
@@ -41,4 +43,5 @@ def scrape_quotes():
 
 @app.get("/results")
 def get_results():
-    return {"scraped_data": scraped_data}
+    with data_lock:
+        return {"scraped_data": scraped_data}
