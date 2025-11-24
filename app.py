@@ -1,10 +1,14 @@
 
+import sys
+from twisted.internet import asyncioreactor
+asyncioreactor.install()  # ✅ Must be first
+
 from fastapi import FastAPI, Request, Response
+from scrapy.spiders import Spider
+from scrapy.crawler import CrawlerRunner
 from twisted.internet import reactor, defer
 import threading
 from threading import Lock
-from scrapy.spiders import Spider
-from scrapy.crawler import CrawlerRunner
 
 app = FastAPI()
 scraped_data = []
@@ -41,14 +45,9 @@ def scrape_quotes():
 
     return {"message": "Scraping started", "scraped_url": "http://quotes.toscrape.com"}
 
-# ✅ Add HEAD support
 @app.api_route("/results", methods=["GET", "HEAD"])
 def get_results(request: Request):
     if request.method == "HEAD":
-        # Return only status code for HEAD request
         return Response(status_code=200)
     with data_lock:
         return {"scraped_data": scraped_data}
-
-
-
