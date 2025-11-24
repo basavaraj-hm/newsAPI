@@ -1,5 +1,6 @@
 
-from fastapi import FastAPI, Request, Responsefrom twisted.internet import reactor, defer
+from fastapi import FastAPI, Request, Response
+from twisted.internet import reactor, defer
 import threading
 from threading import Lock
 from scrapy.spiders import Spider
@@ -48,4 +49,5 @@ def get_results(request: Request):
         return Response(status_code=200)
     with data_lock:
         return {"scraped_data": scraped_data
+
 
