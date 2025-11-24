@@ -48,6 +48,7 @@ def get_results(request: Request):
         # Return only status code for HEAD request
         return Response(status_code=200)
     with data_lock:
-        return {"scraped_data": scraped_data
+        return {"scraped_data": scraped_data}
+
 
 
