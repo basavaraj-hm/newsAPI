@@ -2,6 +2,8 @@
 from fastapi import FastAPI, Request, Responsefrom twisted.internet import reactor, defer
 import threading
 from threading import Lock
+from scrapy.spiders import Spider
+from scrapy.crawler import CrawlerRunner
 
 app = FastAPI()
 scraped_data = []
@@ -45,6 +47,5 @@ def get_results(request: Request):
         # Return only status code for HEAD request
         return Response(status_code=200)
     with data_lock:
-        return {"scraped_data": scraped_data}
-from scrapy.spiders import Spider
-from scrapy.crawler import CrawlerRunner
+        return {"scraped_data": scraped_data
+
