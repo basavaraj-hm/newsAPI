@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI
 from scrapy.spiders import Spider
 from scrapy.crawler import CrawlerRunner
@@ -18,7 +19,7 @@ class QuotesSpider(Spider):
                 'author': quote.css('small.author::text').get()
             }
             scraped_data.append(item)
-            return item
+            yield item  # ✅ Use yield instead of return
 
 @app.get("/scrape")
 def scrape_quotes():
@@ -30,6 +31,14 @@ def scrape_quotes():
         yield runner.crawl(QuotesSpider)
         reactor.stop()
 
-    threading.Thread(target=lambda: crawl() or reactor.run()).start()
+    # ✅ Check if reactor is running
+    if not reactor.running:
+        threading.Thread(target=lambda: crawl() or reactor.run()).start()
+    else:
+        threading.Thread(target=crawl).start()
+
     return {"message": "Scraping started", "scraped_url": "http://quotes.toscrape.com"}
 
+@app.get("/results")
+def get_results():
+    return {"scraped_data": scraped_data}
