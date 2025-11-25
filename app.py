@@ -5,7 +5,7 @@ from scrapy.crawler import CrawlerRunner
 from scrapy.spiders import Spider
 from scrapy.utils.project import get_project_settings
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import ensureDeferred
 from threading import Thread
 
 app = FastAPI()
@@ -36,23 +36,20 @@ def start_reactor():
 reactor_thread = Thread(target=start_reactor, daemon=True)
 reactor_thread.start()
 
-# Helper to run crawl inside reactor
-def run_spider():
+# Helper to run spider
+async def run_spider():
     global scraping_in_progress
     scraping_in_progress = True
     scraped_data.clear()
-    d = runner.crawl(QuotesSpider)
-    d.addCallback(lambda _: setattr(globals(), 'scraping_in_progress', False))
-    return d
+    d = ensureDeferred(runner.crawl(QuotesSpider))
+    await d
+    scraping_in_progress = False
 
 @app.get("/scrape")
 async def scrape_quotes():
     if scraping_in_progress:
         return {"message": "Scraping already in progress"}
-    # Schedule crawl in reactor thread
-    deferred = Deferred()
-    reactor.callFromThread(lambda: run_spider().chainDeferred(deferred))
-    await asyncio.wrap_future(deferred.asFuture(asyncio.get_event_loop()))
+    await run_spider()
     return {"message": "Scraping completed", "scraped_data": scraped_data}
 
 @app.get("/results")
