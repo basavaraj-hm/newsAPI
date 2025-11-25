@@ -104,5 +104,6 @@ def scrape_quotes(tag: Optional[str] = Query(default=None, description="Filter q
 # Optional root endpoint
 @app.get("/")
 def root():
-  return {"message": "Use /scrape or /scrape?tag=life"
+  return {"message": "Use /scrape or /scrape?tag=life"}
+
 
