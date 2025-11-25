@@ -1,14 +1,7 @@
 
 # app.py
-"""
-FastAPI + Scrapy in a single file using Crochet to bridge Twisted with FastAPI.
-Endpoint:
-  - GET /scrape
-  - Optional query param: ?tag=life (filters quotes by tag on quotes.toscrape.com)
-"""
-
 import crochet
-crochet.setup()  # Start Twisted reactor in a background thread ONCE
+crochet.setup()  # Start Twisted reactor in a background thread (call once)
 
 from typing import Optional, List, Dict
 from fastapi import FastAPI, Query
@@ -19,8 +12,7 @@ from scrapy.crawler import CrawlerRunner
 from scrapy import signals
 from twisted.internet import defer
 
-# ---------- Scrapy spider (inline) ----------
-
+# ---------- Scrapy spider ----------
 class QuoteItem(scrapy.Item):
     text = scrapy.Field()
     author = scrapy.Field()
@@ -52,42 +44,42 @@ class QuotesSpider(scrapy.Spider):
         if next_page:
             yield response.follow(next_page, callback=self.parse)
 
-# ---------- Collector to gather items via signals ----------
-
+# ---------- Collector ----------
 class ItemCollector:
     def __init__(self):
         self.items: List[Dict] = []
 
     def connect(self, crawler):
-        crawler.signals.connect(self._item_passed, signal=signals.item_passed)
+        # Use item_scraped to collect items after pipelines
+        crawler.signals.connect(self._item_scraped, signal=signals.item_scraped)
 
-    def _item_passed(self, item, response, spider):
-        self.items.append(dict(item))
+    def _item_scraped(self, item, response, spider):
+        # Convert Item to dict
+        try:
+            self.items.append(dict(item))
+        except Exception:
+            # If item is already a dict
+            self.items.append(item)
 
-# ---------- FastAPI app + Scrapy runner ----------
+# ---------- FastAPI ----------
+app = FastAPI(title="FastAPI + Scrapy (Single-file)")
 
-app = FastAPI(title="FastAPI + Scrapy (Single-file Demo)")
-
-# Minimal Scrapy settings inline (optional tuning)
 SCRAPY_SETTINGS = {
     "ROBOTSTXT_OBEY": True,
     "DOWNLOAD_DELAY": 0.2,
     "CONCURRENT_REQUESTS": 8,
     "LOG_LEVEL": "INFO",
+    # If you add pipelines, item_scraped is emitted AFTER pipelines run
+    # "ITEM_PIPELINES": { "path.to.pipeline.Class": 300 },
 }
 
 RUNNER = CrawlerRunner(settings=SCRAPY_SETTINGS)
 
 @app.get("/scrape")
 def scrape_quotes(tag: Optional[str] = Query(default=None, description="Filter quotes by tag, e.g. 'life'")):
-    """
-    Trigger the Scrapy spider and return collected items as JSON.
-    Blocks until the crawl finishes or timeout (via crochet.wait_for).
-    """
-
     collector = ItemCollector()
 
-    @crochet.wait_for(timeout=30.0)  # Wait up to 30s for the crawl to finish
+    @crochet.wait_for(timeout=30.0)  # Wait up to 30 seconds
     def _crawl(tag_arg: Optional[str]):
         crawler = RUNNER.create_crawler(QuotesSpider)
         collector.connect(crawler)
@@ -100,10 +92,5 @@ def scrape_quotes(tag: Optional[str] = Query(default=None, description="Filter q
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     return {"count": len(collector.items), "results": collector.items}
-
-# Optional root endpoint
-@app.get("/")
-def root():
-  return {"message": "Use /scrape or /scrape?tag=life"}
 
 
