@@ -8,6 +8,8 @@ nsepython
 apscheduler
 scrapy
 twisted
+httpx
+
 
 
 
