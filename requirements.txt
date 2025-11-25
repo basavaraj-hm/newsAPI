@@ -9,6 +9,8 @@ apscheduler
 scrapy
 twisted
 httpx
+scrape
+
 
 
 
