@@ -1,23 +1,27 @@
 
 from fastapi import FastAPI
-from scrape import Scraper
+from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
+from my_spider import SimpleSpider
+import asyncio
 
 app = FastAPI()
 
 @app.get("/scrape")
-def scrape_page(url: str):
+async def scrape(url: str):
     """
-    Scrape the given URL using the scrape module and return the page title and links.
+    Run Scrapy spider programmatically and return scraped data.
     """
-    try:
-        scraper = Scraper(url)
-        title = scraper.title()  # Get page title
-        links = scraper.links()  # Get all links on the page
+    scraped_data = []
 
-        return {
-            "url": url,
-            "title": title,
-            "links": links
-        }
-    except Exception as e:
-        return {"error": str(e)}
+    def crawler_results(item):
+        scraped_data.append(item)
+
+    process = CrawlerProcess(get_project_settings())
+    process.crawl(SimpleSpider, url=url)
+    process.signals.connect(crawler_results, signal=scrapy.signals.item_scraped)
+
+    # Run Scrapy in a thread to avoid blocking FastAPI
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, process.start)
+
