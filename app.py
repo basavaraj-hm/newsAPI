@@ -1,9 +1,23 @@
-from fastapi import FastAPI, Query
-from scrape import scrape
+
+from fastapi import FastAPI
+from scrape import Scraper
 
 app = FastAPI()
 
 @app.get("/scrape")
-def scrape_api(url: str = Query(...)):
-    data = scrape(url)
-    return data  # Returns structured JSON with fields like title, description, links, etc.
+def scrape_page(url: str):
+    """
+    Scrape the given URL using the scrape module and return the page title and links.
+    """
+    try:
+        scraper = Scraper(url)
+        title = scraper.title()  # Get page title
+        links = scraper.links()  # Get all links on the page
+
+        return {
+            "url": url,
+            "title": title,
+            "links": links
+        }
+    except Exception as e:
+        return {"error": str(e)}
