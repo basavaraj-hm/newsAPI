@@ -1,10 +1,9 @@
-import httpx
 from fastapi import FastAPI, Query
+from scrape import scrape
 
 app = FastAPI()
 
 @app.get("/scrape")
-async def scrape(url: str = Query(..., description="URL to scrape")):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return {"content": response.text}
+def scrape_api(url: str = Query(...)):
+    data = scrape(url)
+    return data  # Returns structured JSON with fields like title, description, links, etc.
