@@ -1,76 +1,196 @@
 
-# app.py (at project root)
+# app.py
+import re
 import asyncio
-from twisted.internet import asyncioreactor
-asyncioreactor.install(asyncio.get_event_loop())
+from typing import Optional, List, Dict
+from urllib.parse import urlparse, urljoin
 
-from fastapi import FastAPI, Query
+import httpx
+from bs4 import BeautifulSoup
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
-import scrapy
-from scrapy.crawler import CrawlerRunner
-from scrapy import signals
 
-from twisted.internet import reactor
-print("Twisted reactor in use:", reactor.__class__)
+APP_NAME = "URL Fetch & Page Analyzer (FastAPI)"
+app = FastAPI(title=APP_NAME)
 
-app = FastAPI(title="FastAPI + Scrapy (Asyncio)")
+# ---- Configs ----
+DEFAULT_TIMEOUT = 15.0
+MAX_CONTENT_BYTES = 5 * 1024 * 1024  # 5MB cap (avoid huge downloads)
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 "
+    f"{APP_NAME}"
+)
 
-SCRAPY_SETTINGS = {
-    "LOG_LEVEL": "INFO",
-    "CONCURRENT_REQUESTS": 8,
-    "DOWNLOAD_DELAY": 0.2,
-    "ROBOTSTXT_OBEY": True,
-    "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
-}
+ALLOWED_SCHEMES = {"http", "https"}
 
-RUNNER = CrawlerRunner(settings=SCRAPY_SETTINGS)
+# ---- Helpers ----
+def normalize_url(url: str) -> str:
+    url = url.strip()
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", url):
+        # If no scheme, default to https
+        url = "https://" + url
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in ALLOWED_SCHEMES:
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+    if not parsed.netloc:
+        raise ValueError("URL must include a hostname")
+    return url
 
-class QuoteItem(scrapy.Item):
-    text = scrapy.Field()
-    author = scrapy.Field()
-    tags = scrapy.Field()
+def extract_text(el) -> Optional[str]:
+    if not el:
+        return None
+    txt = el.get_text(strip=True)
+    return txt or None
 
-class QuotesSpider(scrapy.Spider):
-    name = "quotes"
-    allowed_domains = ["quotes.toscrape.com"]
-    def __init__(self, tag: str | None = None, **kwargs):
-        super().__init__(**kwargs)
-        self.tag = tag
-    def start_requests(self):
-        base = "https://quotes.toscrape.com/"
-        url = f"{base}tag/{self.tag}/" if self.tag else base
-        yield scrapy.Request(url, callback=self.parse)
-    def parse(self, response):
-        for quote in response.css("div.quote"):
-            item = QuoteItem()
-            item["text"] = quote.css("span.text::text").get()
-            item["author"] = quote.css("small.author::text").get()
-            item["tags"] = quote.css("div.tags a.tag::text").getall()
-            yield item
-        next_page = response.css("li.next a::attr(href)").get()
-        if next_page:
-            yield response.follow(next_page, callback=self.parse)
+def safe_meta(soup: BeautifulSoup, name: Optional[str] = None, prop: Optional[str] = None) -> Optional[str]:
+    if name:
+        m = soup.find("meta", attrs={"name": name})
+        if m and m.get("content"):
+            return m["content"].strip()
+    if prop:
+        m = soup.find("meta", attrs={"property": prop})
+        if m and m.get("content"):
+            return m["content"].strip()
+    return None
 
-class ItemCollector:
-    def __init__(self):
-        self.items: list[dict] = []
-    def connect(self, crawler):
-        crawler.signals.connect(self._item_scraped, signal=signals.item_scraped)
-    def _item_scraped(self, item, response, spider):
+def extract_links(soup: BeautifulSoup, base_url: str) -> List[str]:
+    links = set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        # Skip javascript/mailto/tel/etc.
+        if href.startswith("#") or href.startswith("javascript:") or href.startswith("data:"):
+            continue
+        abs_url = urljoin(base_url, href)
+        # Basic sanity
         try:
-            self.items.append(dict(item))
+            parsed = urlparse(abs_url)
+            if parsed.scheme in ALLOWED_SCHEMES and parsed.netloc:
+                links.add(abs_url)
         except Exception:
-            self.items.append(item)
+            continue
+    return sorted(links)
 
-@app.get("/scrape")
-async def scrape_quotes(tag: str | None = Query(default=None)):
-    collector = ItemCollector()
-    crawler = RUNNER.create_crawler(QuotesSpider)
-    collector.connect(crawler)
+def content_type_is_html(content_type: Optional[str]) -> bool:
+    if not content_type:
+        return False
+    ct = content_type.split(";")[0].strip().lower()
+    return ct in {"text/html", "application/xhtml+xml"}
+
+# ---- Main fetch routine ----
+async def fetch_url(url: str, timeout: float = DEFAULT_TIMEOUT) -> Dict:
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+    }
+
+    async with httpx.AsyncClient(
+        headers=headers,
+        timeout=httpx.Timeout(timeout),
+        follow_redirects=True,
+        max_redirects=5,
+        http2=True,
+        limits=httpx.Limits(max_keepalive_connections=5, max_connections=20),
+    ) as client:
+        resp = await client.get(url)
+        status = resp.status_code
+        final_url = str(resp.url)
+        content_type = resp.headers.get("Content-Type", "")
+        content_length = int(resp.headers.get("Content-Length", "0") or 0)
+
+        # Guard against huge bodies
+        if content_length and content_length > MAX_CONTENT_BYTES:
+            raise HTTPException(status_code=413, detail=f"Content too large: {content_length} bytes")
+
+        # Load partial if unknown size
+        body_bytes = resp.content[:MAX_CONTENT_BYTES]
+
+        result: Dict = {
+            "request_url": url,
+            "final_url": final_url,
+            "status": status,
+            "content_type": content_type,
+            "content_length": min(len(body_bytes), content_length or len(body_bytes)),
+            "is_html": content_type_is_html(content_type),
+            "page": {},
+        }
+
+        if not result["is_html"]:
+            # For non-HTML: return headers only
+            return result
+
+        # Parse HTML
+        soup = BeautifulSoup(body_bytes, "lxml")
+
+        # Core page fields
+        title_el = soup.find("title")
+        canonical_el = soup.find("link", rel=lambda v: v and "canonical" in v)
+        description = safe_meta(soup, name="description")
+        og_title = safe_meta(soup, prop="og:title")
+        og_desc = safe_meta(soup, prop="og:description")
+        og_image = safe_meta(soup, prop="og:image")
+        twitter_title = safe_meta(soup, name="twitter:title")
+        twitter_desc = safe_meta(soup, name="twitter:description")
+        twitter_image = safe_meta(soup, name="twitter:image")
+
+        # Headings
+        h1 = [extract_text(h) for h in soup.find_all("h1")]
+        h2 = [extract_text(h) for h in soup.find_all("h2")]
+        h3 = [extract_text(h) for h in soup.find_all("h3")]
+        h1 = [t for t in h1 if t]
+        h2 = [t for t in h2 if t]
+        h3 = [t for t in h3 if t]
+
+        # Links
+        links = extract_links(soup, final_url)
+
+        result["page"] = {
+            "title": extract_text(title_el),
+            "canonical": canonical_el["href"].strip() if canonical_el and canonical_el.get("href") else None,
+            "meta": {
+                "description": description,
+                "og": {
+                    "title": og_title,
+                    "description": og_desc,
+                    "image": og_image,
+                },
+                "twitter": {
+                    "title": twitter_title,
+                    "description": twitter_desc,
+                    "image": twitter_image,
+                },
+            },
+            "headings": {
+                "h1": h1,
+                "h2": h2,
+                "h3": h3,
+            },
+            "links": links,
+        }
+
+        return result
+
+# ---- FastAPI endpoint ----
+@app.get("/search")
+async def search_by_url(
+    url: str = Query(..., description="Target URL to fetch and analyze"),
+    timeout: float = Query(DEFAULT_TIMEOUT, ge=1.0, le=60.0, description="Timeout in seconds"),
+):
     try:
-        d = RUNNER.crawl(crawler, tag=tag)
-        fut = d.asFuture(asyncio.get_event_loop())
-        await fut
+        normalized = normalize_url(url)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    try:
+        result = await fetch_url(normalized, timeout=timeout)
+        return JSONResponse(content=result)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail=f"Timed out fetching {normalized}")
+    except httpx.RequestError as re:
+        raise HTTPException(status_code=502, detail=f"Request error: {re}")
+    except HTTPException:
+        raise
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-    return {"count": len(collector.items), "results": collector.items}
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
