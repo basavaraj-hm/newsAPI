@@ -1,227 +1,184 @@
 
-# app.py
-import re
-import base64
-from typing import Optional, Dict, Any, Iterable
+# main.py
+import asyncio
 from urllib.parse import urlparse
 
-import httpx
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+# 1) Install AsyncioSelectorReactor BEFORE importing any Twisted/Scrapy modules
+from twisted.internet import asyncioreactor
+asyncioreactor.install(asyncio.get_event_loop())
 
-APP_NAME = "URL Fetch (Full Response JSON + Raw Streaming)"
-app = FastAPI(title=APP_NAME)
+from typing import Optional, List, Dict
 
-DEFAULT_TIMEOUT = 20.0
-MAX_CONTENT_BYTES = 10 * 1024 * 1024  # 10 MB default cap for /fetch
-USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 "
-    f"{APP_NAME}"
-)
-ALLOWED_SCHEMES = {"http", "https"}
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 
+import scrapy
+from scrapy.crawler import CrawlerRunner
+from scrapy import signals
 
-# -------- Helpers --------
-def normalize_url(url: str) -> str:
-    url = url.strip()
-    # Prepend https:// if missing scheme
-    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", url):
-        url = "https://" + url
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in ALLOWED_SCHEMES:
-        raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
-    if not parsed.netloc:
-        raise ValueError("URL must include a hostname")
-    return url
+# Optional: sanity check log
+from twisted.internet import reactor
+print("Twisted reactor in use:", reactor.__class__)
 
+# ---------- Scrapy settings ----------
+SCRAPY_SETTINGS = {
+    "ROBOTSTXT_OBEY": True,
+    "DOWNLOAD_DELAY": 0.25,
+    "CONCURRENT_REQUESTS": 8,
+    "LOG_LEVEL": "INFO",
+    "USER_AGENT": "Mozilla/5.0 (compatible; FastAPI-Scrapy/1.0; +https://example.com/contact)",
+    # Align Scrapy’s expectation with the reactor we installed:
+    "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
+}
 
-def is_text_like(content_type: Optional[str]) -> bool:
-    if not content_type:
-        return False
-    ct = content_type.split(";")[0].strip().lower()
-    return (
-        ct.startswith("text/")
-        or ct in {"application/json", "application/xml", "application/xhtml+xml"}
-    )
+RUNNER = CrawlerRunner(settings=SCRAPY_SETTINGS)
 
+# ---------- Item collector ----------
+class ItemCollector:
+    """Collect items emitted by spiders (after pipelines) via signals."""
+    def __init__(self):
+        self.items: List[Dict] = []
 
-def sanitize_response_headers(headers: httpx.Headers) -> Dict[str, str]:
+    def connect(self, crawler):
+        crawler.signals.connect(self._item_scraped, signal=signals.item_scraped)
+
+    def _item_scraped(self, item, response, spider):
+        try:
+            self.items.append(dict(item))
+        except Exception:
+            self.items.append(item)
+
+# ---------- Example spider: quotes.toscrape.com ----------
+class QuoteItem(scrapy.Item):
+    text = scrapy.Field()
+    author = scrapy.Field()
+    tags = scrapy.Field()
+    source_url = scrapy.Field()
+
+class QuotesSpider(scrapy.Spider):
+    name = "quotes"
+    allowed_domains = ["quotes.toscrape.com"]
+
+    def __init__(self, tag: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.tag = tag
+
+    def start_requests(self):
+        base = "https://quotes.toscrape.com/"
+        url = f"{base}tag/{self.tag}/" if self.tag else base
+        yield scrapy.Request(url, callback=self.parse)
+
+    def parse(self, response):
+        for q in response.css("div.quote"):
+            item = QuoteItem()
+            item["text"] = q.css("span.text::text").get()
+            item["author"] = q.css("small.author::text").get()
+            item["tags"] = q.css("div.tags a.tag::text").getall()
+            item["source_url"] = response.url
+            yield item
+
+        next_page = response.css("li.next a::attr(href)").get()
+        if next_page:
+            yield response.follow(next_page, callback=self.parse)
+
+# ---------- Generic crawler spider ----------
+class PageItem(scrapy.Item):
+    url = scrapy.Field()
+    title = scrapy.Field()
+    h1 = scrapy.Field()
+    h2 = scrapy.Field()
+    h3 = scrapy.Field()
+    links = scrapy.Field()
+
+class SiteSpider(scrapy.Spider):
     """
-    Remove hop-by-hop headers that shouldn't be forwarded, per RFC 7230.
+    Crawl same-domain pages starting from start_url, up to max_pages.
+    Extracts title, headings, and links per page.
     """
-    hop_by_hop = {
-        "connection",
-        "keep-alive",
-        "proxy-authenticate",
-        "proxy-authorization",
-        "te",
-        "trailer",
-        "transfer-encoding",
-        "upgrade",
-    }
-    return {k: v for k, v in headers.items() if k.lower() not in hop_by_hop}
+    name = "site_spider"
 
+    def __init__(self, start_url: str, max_pages: int = 10, **kwargs):
+        super().__init__(**kwargs)
+        self.start_url = start_url
+        self.max_pages = int(max_pages)
+        self.seen = set()
 
-# -------- /fetch (JSON) --------
-@app.get("/fetch")
-async def fetch(
-    url: str = Query(..., description="Target URL to fetch"),
-    timeout: float = Query(DEFAULT_TIMEOUT, ge=1.0, le=120.0, description="Timeout in seconds"),
-    max_bytes: int = Query(MAX_CONTENT_BYTES, ge=1_000, le=100_000_000, description="Max bytes to read"),
-    follow_redirects: bool = Query(True, description="Follow HTTP redirects"),
+        # Derive allowed_domains from the start URL
+        parsed = urlparse(start_url)
+        self.base_netloc = parsed.netloc
+        self.allowed_domains = [parsed.hostname] if parsed.hostname else []
+
+    def start_requests(self):
+        yield scrapy.Request(self.start_url, callback=self.parse)
+
+    def parse(self, response):
+        # Avoid revisiting pages
+        if response.url in self.seen:
+            return
+        self.seen.add(response.url)
+
+        # Extract basic page data
+        item = PageItem()
+        item["url"] = response.url
+        item["title"] = response.css("title::text").get()
+        item["h1"] = [h.get().strip() for h in response.css("h1::text")]
+        item["h2"] = [h.get().strip() for h in response.css("h2::text")]
+        item["h3"] = [h.get().strip() for h in response.css("h3::text")]
+        item["links"] = [response.urljoin(href) for href in response.css("a::attr(href)").getall()]
+        yield item
+
+        # Follow same-domain links until max_pages
+        if len(self.seen) >= self.max_pages:
+            return
+
+        for href in response.css("a::attr(href)").getall():
+            url = response.urljoin(href)
+            netloc = urlparse(url).netloc
+            if netloc == self.base_netloc and url not in self.seen:
+                yield response.follow(url, callback=self.parse)
+
+# ---------- FastAPI app ----------
+app = FastAPI(title="FastAPI + Scrapy (Asyncio Reactor)")
+
+@app.get("/reactor")
+def reactor_info():
+    return {"reactor": str(reactor.__class__)}
+
+@app.get("/scrape-quotes")
+async def scrape_quotes(
+    tag: Optional[str] = Query(default=None, description="Filter quotes by tag, e.g., 'life'"),
+    timeout: float = Query(30.0, ge=1.0, le=120.0)
 ):
-    """
-    Fetches the URL and returns a JSON containing status, headers, final_url,
-    and the full body (as text for text-like types, or base64 for binary).
-    """
+    collector = ItemCollector()
+    crawler = RUNNER.create_crawler(QuotesSpider)
+    collector.connect(crawler)
     try:
-        normalized = normalize_url(url)
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-    }
-
-    try:
-        async with httpx.AsyncClient(
-            headers=headers,
-            timeout=httpx.Timeout(timeout),
-            follow_redirects=follow_redirects,
-            max_redirects=5,
-            http2=False,  # set True only if you install httpx[http2]
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=20),
-        ) as client:
-            resp = await client.get(normalized)
-
-            # Enforce content-size safety
-            content_length_hdr = resp.headers.get("Content-Length")
-            if content_length_hdr:
-                try:
-                    content_length_val = int(content_length_hdr)
-                except ValueError:
-                    content_length_val = 0
-            else:
-                content_length_val = 0
-
-            # Read at most max_bytes
-            body = resp.content[:max_bytes]
-            truncated = content_length_val > max_bytes or len(resp.content) > len(body)
-
-            content_type = resp.headers.get("Content-Type", "")
-            result: Dict[str, Any] = {
-                "request_url": normalized,
-                "final_url": str(resp.url),
-                "status": resp.status_code,
-                "reason": resp.reason_phrase,
-                "http_version": resp.http_version,  # e.g., "HTTP/1.1" or "HTTP/2"
-                "headers": dict(resp.headers),
-                "content_type": content_type,
-                "content_length_header": content_length_val,
-                "bytes_returned": len(body),
-                "truncated": truncated,
-            }
-
-            if is_text_like(content_type):
-                # Decode using response encoding (falls back to apparent encoding)
-                text = None
-                try:
-                    # If we didn't truncate, resp.text uses internal decoder; otherwise, decode manually
-                    text = resp.text if len(body) == len(resp.content) else body.decode(resp.encoding or "utf-8", errors="replace")
-                except Exception:
-                    text = body.decode("utf-8", errors="replace")
-                result["text"] = text
-            else:
-                # Return base64 for binary/non-text content
-                result["content_base64"] = base64.b64encode(body).decode("ascii")
-
-            return JSONResponse(content=result)
-
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail=f"Timed out fetching {normalized}")
-    except httpx.RequestError as re:
-        raise HTTPException(status_code=502, detail=f"Request error: {re}")
+        d = RUNNER.crawl(crawler, tag=tag)  # returns Twisted Deferred
+        fut = d.asFuture(asyncio.get_event_loop())  # convert to asyncio Future
+        await fut
+        return {"count": len(collector.items), "results": collector.items}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-
-# -------- /fetch/raw (Streaming) --------
-@app.get("/fetch/raw")
-async def fetch_raw(
-    url: str = Query(..., description="Target URL to fetch"),
-    timeout: float = Query(DEFAULT_TIMEOUT, ge=1.0, le=120.0, description="Timeout in seconds"),
-    follow_redirects: bool = Query(True, description="Follow HTTP redirects"),
-    chunk_size: int = Query(64 * 1024, ge=1024, le=4_194_304, description="Streaming chunk size (bytes)"),
-    range_header: Optional[str] = Query(None, alias="range", description="Optional Range header (e.g., 'bytes=0-1023')"),
-    filename: Optional[str] = Query(None, description="Optional filename for Content-Disposition"),
+@app.get("/crawl")
+async def crawl_site(
+    url: str = Query(..., description="Starting URL to crawl"),
+    max_pages: int = Query(10, ge=1, le=200, description="Max number of pages to visit"),
+    timeout: float = Query(60.0, ge=1.0, le=300.0)
 ):
-    """
-    Streams the raw response back to the client.
-    - Preserves status code and key headers (Content-Type, Content-Length if known).
-    - Supports optional Range request and Content-Disposition filename.
-    """
+    collector = ItemCollector()
+    crawler = RUNNER.create_crawler(SiteSpider)
+    collector.connect(crawler)
     try:
-        normalized = normalize_url(url)
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-    }
-    if range_header:
-        headers["Range"] = range_header
-
-    try:
-        async with httpx.AsyncClient(
-            headers=headers,
-            timeout=httpx.Timeout(timeout),
-            follow_redirects=follow_redirects,
-            max_redirects=5,
-            http2=False,  # set True only if you install httpx[http2]
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=20),
-        ) as client:
-
-            # Use streaming API to avoid loading the entire body in memory
-            async with client.stream("GET", normalized) as resp:
-                status_code = resp.status_code
-                raw_headers = sanitize_response_headers(resp.headers)
-
-                # If caller wants to force a filename, add Content-Disposition
-                if filename:
-                    raw_headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-                # Pass through Content-Length when known
-                # httpx stream keeps headers; Content-Length may be present.
-                content_length = resp.headers.get("Content-Length")
-                if content_length is not None:
-                    raw_headers["Content-Length"] = content_length
-
-                # Content-Type passthrough (important for browsers)
-                content_type = resp.headers.get("Content-Type", "application/octet-stream")
-
-                async def iter_bytes() -> Iterable[bytes]:
-                    async for chunk in resp.aiter_bytes(chunk_size=chunk_size):
-                        if chunk:
-                            yield chunk
-
-                return StreamingResponse(
-                    iter_bytes(),
-                    status_code=status_code,
-                    media_type=content_type,
-                    headers=raw_headers,
-                    background=None,  # you can attach cleanup tasks if needed
-                )
-
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail=f"Timed out fetching {normalized}")
-    except httpx.RequestError as re:
-        raise HTTPException(status_code=502, detail=f"Request error: {re}")
+        d = RUNNER.crawl(crawler, start_url=url, max_pages=max_pages)
+        fut = d.asFuture(asyncio.get_event_loop())
+        # Optional: enforce timeout
+        await asyncio.wait_for(fut, timeout=timeout)
+        return {"count": len(collector.items), "results": collector.items}
+    except asyncio.TimeoutError:
+        try:
+            crawler.stop()
+        except Exception:
+            pass
+        return JSONResponse(status_code=504, content={"error": f"Crawl timed out after {timeout} seconds"})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
