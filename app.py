@@ -2,105 +2,80 @@
 # main.py
 import os
 import asyncio
+import time
+import uuid
 from typing import Optional, List, Dict
 from urllib.parse import urlparse
 
 # -------------------------------------------------------------
-# 1) Install AsyncioSelectorReactor BEFORE importing Twisted/Scrapy
-#    and ensure env var doesn't force a different reactor
+# Reactor: install AsyncioSelectorReactor BEFORE importing Scrapy/Twisted
 # -------------------------------------------------------------
 os.environ.pop("TWISTED_REACTOR", None)
 
 from twisted.internet import asyncioreactor
 asyncioreactor.install(asyncio.get_event_loop())
 
-# Now it's safe to import Twisted/Scrapy/FastAPI
 from twisted.internet import reactor
 from twisted.internet import error as terror  # ConnectionDone, ConnectionLost
 
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
-
+import httpx  # for ping
 import scrapy
 from scrapy.crawler import CrawlerRunner
 from scrapy import signals
 
+app = FastAPI(title="FastAPI + Scrapy (Asyncio Reactor, Job-based)")
 
 # -------------------------------------------------------------
-# 2) FastAPI app and Scrapy settings
+# Scrapy settings: tuned for faster demo runs
 # -------------------------------------------------------------
-app = FastAPI(title="FastAPI + Scrapy (Asyncio Reactor)")
-
-SCRAPY_SETTINGS = {
-    # Politeness & basics
-    "ROBOTSTXT_OBEY": True,
-    "DOWNLOAD_DELAY": 0.25,               # small delay to be polite
-    "CONCURRENT_REQUESTS": 8,             # tune per site
+BASE_SETTINGS = {
+    "ROBOTSTXT_OBEY": True,             # set False per-run to test faster
+    "DOWNLOAD_DELAY": 0.10,             # small delay
+    "CONCURRENT_REQUESTS": 8,
     "LOG_LEVEL": "INFO",
     "USER_AGENT": "Mozilla/5.0 (compatible; FastAPI-Scrapy/1.0; +https://example.com/contact)",
 
-    # Make Scrapy expect the same reactor we installed
     "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
 
-    # Timeouts & retries (optional tuning)
-    "DOWNLOAD_TIMEOUT": 30,
+    # Aggressive timeouts to avoid hanging
+    "DOWNLOAD_TIMEOUT": 15,             # per-request
+    "DNS_TIMEOUT": 5,
     "RETRY_ENABLED": True,
-    "RETRY_TIMES": 2,
+    "RETRY_TIMES": 1,
     "RETRY_HTTP_CODES": [500, 502, 503, 504, 522, 524, 408, 429],
 
-    # AutoThrottle (optional, helps avoid hammering servers)
-    "AUTOTHROTTLE_ENABLED": True,
-    "AUTOTHROTTLE_START_DELAY": 0.5,
-    "AUTOTHROTTLE_MAX_DELAY": 30.0,
-    "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
-
-    # Close spider if it runs too long (safety)
-    "CLOSESPIDER_TIMEOUT": 300,
-
-    # Allow redirects
+    "AUTOTHROTTLE_ENABLED": False,      # disable for speed; enable in production
     "REDIRECT_ENABLED": True,
-
-    # Disable Telnet console
     "TELNETCONSOLE_ENABLED": False,
 
-    # If you use pipelines/middlewares, declare them here:
-    # "ITEM_PIPELINES": {
-    #     "your_project.pipelines.YourPipeline": 300
-    # },
-    # "DOWNLOADER_MIDDLEWARES": {
-    #     "scrapy.downloadermiddlewares.retry.RetryMiddleware": 550,
-    # }
+    # Twisted reactor thread pool (helps DNS/TLS on some platforms)
+    "REACTOR_THREADPOOL_MAXSIZE": 20,
 }
-
-RUNNER = CrawlerRunner(settings=SCRAPY_SETTINGS)
 
 print("Twisted reactor in use:", reactor.__class__)
 
+# -------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------
+def validate_url_or_400(url: str) -> str:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Provide a full URL, e.g., https://example.com")
+    return url
 
-# -------------------------------------------------------------
-# 3) Helpers
-# -------------------------------------------------------------
 def stop_crawler_safely(crawler):
     try:
         crawler.stop()
     except Exception:
         pass
 
-def validate_url_or_400(url: str) -> str:
-    parsed = urlparse(url)
-    if not parsed.scheme or not parsed.netloc:
-        raise HTTPException(
-            status_code=400,
-            detail="Query param 'url' must include scheme and host, e.g., https://example.com"
-        )
-    return url
-
-
 # -------------------------------------------------------------
-# 4) Item collector via Scrapy signal (post-pipeline)
+# Item collector via Scrapy signal
 # -------------------------------------------------------------
 class ItemCollector:
-    """Collect items emitted by spiders (after pipelines) via signals."""
+    """Collect items emitted by spiders (post-pipeline) via Scrapy signals."""
     def __init__(self):
         self.items: List[Dict] = []
 
@@ -113,10 +88,8 @@ class ItemCollector:
         except Exception:
             self.items.append(item)
 
-
 # -------------------------------------------------------------
-# 5) Quotes spider (Scrapy ≥ 2.13 with async start())
-#    Keeps start_requests() for backward compatibility
+# Quotes spider (Scrapy ≥ 2.13 using async start())
 # -------------------------------------------------------------
 class QuoteItem(scrapy.Item):
     text = scrapy.Field()
@@ -132,13 +105,12 @@ class QuotesSpider(scrapy.Spider):
         super().__init__(**kwargs)
         self.tag = tag
 
-    # New Scrapy ≥ 2.13 entrypoint (async generator)
     async def start(self):
         base = "https://quotes.toscrape.com/"
         url = f"{base}tag/{self.tag}/" if self.tag else base
         yield scrapy.Request(url, callback=self.parse)
 
-    # Backward compatibility for Scrapy < 2.13
+    # Backward-compat (Scrapy < 2.13)
     def start_requests(self):
         base = "https://quotes.toscrape.com/"
         url = f"{base}tag/{self.tag}/" if self.tag else base
@@ -157,143 +129,120 @@ class QuotesSpider(scrapy.Spider):
         if next_page:
             yield response.follow(next_page, callback=self.parse)
 
+# -------------------------------------------------------------
+# Job store (in-memory)
+# -------------------------------------------------------------
+JOBS: Dict[str, Dict] = {}  # task_id -> { started, done, error, count, results }
+
+def new_task_id() -> str:
+    return uuid.uuid4().hex
 
 # -------------------------------------------------------------
-# 6) Generic site crawler spider (same-domain crawl)
-#    Uses async start() and keeps start_requests() for compat
+# Quotes spider: job-based endpoints
 # -------------------------------------------------------------
-class PageItem(scrapy.Item):
-    url = scrapy.Field()
-    title = scrapy.Field()
-    h1 = scrapy.Field()
-    h2 = scrapy.Field()
-    h3 = scrapy.Field()
-    links = scrapy.Field()
-
-class SiteSpider(scrapy.Spider):
+@app.post("/scrape-quotes/start")
+async def scrape_quotes_start(
+    tag: Optional[str] = Query(default=None, description="Filter quotes by tag, e.g., 'life'"),
+    page_limit: int = Query(2, ge=1, le=50, description="Max pages to visit"),
+    obey_robots: bool = Query(True, description="Respect robots.txt"),
+    log_level: str = Query("INFO", description="Scrapy log level (INFO/DEBUG/WARNING)"),
+):
     """
-    Crawl same-domain pages starting from start_url, up to max_pages.
-    Extracts title, headings, and links per page.
+    Starts a quotes crawl job. Returns a task_id immediately.
+    Client can poll /scrape-quotes/status and /scrape-quotes/result.
     """
-    name = "site_spider"
+    # Per-run settings, including an explicit page cap
+    settings = {
+        **BASE_SETTINGS,
+        "LOG_LEVEL": log_level,
+        "ROBOTSTXT_OBEY": obey_robots,
+        "CLOSESPIDER_PAGECOUNT": page_limit,
+    }
+    runner = CrawlerRunner(settings=settings)
 
-    def __init__(self, start_url: str, max_pages: int = 10, **kwargs):
-        super().__init__(**kwargs)
-        self.start_url = start_url
-        self.max_pages = int(max_pages)
-        self.seen = set()
+    collector = ItemCollector()
+    crawler = runner.create_crawler(QuotesSpider)
+    collector.connect(crawler)
 
-        parsed = urlparse(start_url)
-        self.base_netloc = parsed.netloc
-        self.allowed_domains = [parsed.hostname] if parsed.hostname else []
+    # Start the crawl
+    d = runner.crawl(crawler, tag=tag)
+    d.addErrback(lambda f: f.trap(terror.ConnectionDone, terror.ConnectionLost))
 
-    # New Scrapy ≥ 2.13 entrypoint (async generator)
-    async def start(self):
-        yield scrapy.Request(self.start_url, callback=self.parse)
+    task_id = new_task_id()
+    JOBS[task_id] = {
+        "started": time.time(),
+        "done": False,
+        "error": None,
+        "count": 0,
+        "results": [],
+    }
 
-    # Backward compatibility for Scrapy < 2.13
-    def start_requests(self):
-        yield scrapy.Request(self.start_url, callback=self.parse)
+    async def finalize():
+        try:
+            fut = d.asFuture(asyncio.get_event_loop())
+            await fut
+            JOBS[task_id]["done"] = True
+            JOBS[task_id]["results"] = collector.items
+            JOBS[task_id]["count"] = len(collector.items)
+        except Exception as e:
+            JOBS[task_id]["done"] = True
+            JOBS[task_id]["error"] = str(e)
+            JOBS[task_id]["results"] = collector.items
+            JOBS[task_id]["count"] = len(collector.items)
 
-    def parse(self, response):
-        if response.url in self.seen:
-            return
-        self.seen.add(response.url)
+    # Fire and forget: don’t block the request
+    asyncio.create_task(finalize())
 
-        item = PageItem()
-        item["url"] = response.url
-        item["title"] = response.css("title::text").get()
-        item["h1"] = [h.get().strip() for h in response.css("h1::text")]
-        item["h2"] = [h.get().strip() for h in response.css("h2::text")]
-        item["h3"] = [h.get().strip() for h in response.css("h3::text")]
-        item["links"] = [response.urljoin(href) for href in response.css("a::attr(href)").getall()]
-        yield item
+    return {"task_id": task_id, "message": "Crawl started", "page_limit": page_limit, "robots": obey_robots}
 
-        if len(self.seen) >= self.max_pages:
-            return
+@app.get("/scrape-quotes/status")
+async def scrape_quotes_status(task_id: str = Query(...)):
+    job = JOBS.get(task_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    elapsed = time.time() - job["started"]
+    return {
+        "task_id": task_id,
+        "done": job["done"],
+        "error": job["error"],
+        "count": job["count"],
+        "elapsed_sec": round(elapsed, 2),
+    }
 
-        for href in response.css("a::attr(href)").getall():
-            url = response.urljoin(href)
-            if urlparse(url).netloc == self.base_netloc and url not in self.seen:
-                yield response.follow(url, callback=self.parse)
-
+@app.get("/scrape-quotes/result")
+async def scrape_quotes_result(task_id: str = Query(...)):
+    job = JOBS.get(task_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    # If not done, you can either block briefly or return partials.
+    if not job["done"]:
+        return JSONResponse(status_code=206, content={"partial": True, "count": job["count"], "results": job["results"]})
+    return {"count": job["count"], "results": job["results"]}
 
 # -------------------------------------------------------------
-# 7) FastAPI endpoints
+# Optional: lightweight connectivity test
+# -------------------------------------------------------------
+@app.get("/ping-website")
+async def ping_website(url: str = Query("https://quotes.toscrape.com/", description="URL to fetch quickly"), timeout: float = Query(10.0, ge=1.0, le=60.0)):
+    # Quick httpx fetch to verify platform/network responsiveness
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            start = time.time()
+            r = await client.get(url)
+            elapsed = time.time() - start
+            return {
+                "url": url,
+                "status": r.status_code,
+                "final_url": str(r.url),
+                "elapsed_sec": round(elapsed, 2),
+                "content_type": r.headers.get("Content-Type"),
+            }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ping error: {e}")
+
+# -------------------------------------------------------------
+# Reactor info
 # -------------------------------------------------------------
 @app.get("/reactor")
 def reactor_info():
     return {"reactor": str(reactor.__class__)}
-
-@app.get("/scrape-quotes")
-async def scrape_quotes(
-    tag: Optional[str] = Query(default=None, description="Filter quotes by tag, e.g., 'life'"),
-    timeout: float = Query(30.0, ge=1.0, le=120.0, description="Max seconds to wait"),
-):
-    collector = ItemCollector()
-    crawler = RUNNER.create_crawler(QuotesSpider)
-    collector.connect(crawler)
-
-    try:
-        # Scrapy returns a Deferred → trap clean-close errors, convert to Future, and await
-        d = RUNNER.crawl(crawler, tag=tag)
-        d.addErrback(lambda f: f.trap(terror.ConnectionDone, terror.ConnectionLost))
-
-        fut = d.asFuture(asyncio.get_event_loop())
-        await asyncio.wait_for(fut, timeout=timeout)
-
-        return {"count": len(collector.items), "results": collector.items}
-
-    except asyncio.TimeoutError:
-        stop_crawler_safely(crawler)
-        return JSONResponse(
-            status_code=504,
-            content={"error": f"Crawl timed out after {timeout} seconds"}
-        )
-
-    except asyncio.CancelledError:
-        # Client disconnected; stop and re-raise
-        stop_crawler_safely(crawler)
-        raise
-
-    except Exception as e:
-        stop_crawler_safely(crawler)
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.get("/crawl")
-async def crawl_site(
-    request: Request,
-    url: str = Query(..., description="Starting URL to crawl, e.g., https://example.com"),
-    max_pages: int = Query(10, ge=1, le=200, description="Max pages to visit"),
-    timeout: float = Query(60.0, ge=1.0, le=300.0, description="Max seconds to wait"),
-):
-    url = validate_url_or_400(url)
-
-    collector = ItemCollector()
-    crawler = RUNNER.create_crawler(SiteSpider)
-    collector.connect(crawler)
-
-    try:
-        d = RUNNER.crawl(crawler, start_url=url, max_pages=max_pages)
-        d.addErrback(lambda f: f.trap(terror.ConnectionDone, terror.ConnectionLost))
-
-        fut = d.asFuture(asyncio.get_event_loop())
-        await asyncio.wait_for(fut, timeout=timeout)
-
-        return {"count": len(collector.items), "results": collector.items}
-
-    except asyncio.TimeoutError:
-        stop_crawler_safely(crawler)
-        return JSONResponse(
-            status_code=504,
-            content={"error": f"Crawl timed out after {timeout} seconds"}
-        )
-
-    except asyncio.CancelledError:
-        stop_crawler_safely(crawler)
-        raise
-
-    except Exception as e:
-        stop_crawler_safely(crawler)
-        return JSONResponse(status_code=500, content={"error": str(e)})
