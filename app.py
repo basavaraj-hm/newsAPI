@@ -182,3 +182,5 @@ async def crawl_site(
             pass
         return JSONResponse(status_code=504, content={"error": f"Crawl timed out after {timeout} seconds"})
     except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
