@@ -12,6 +12,8 @@ httpx
 scrape
 crochet
 lxml
+httpx[http2]
+
 
 
 
