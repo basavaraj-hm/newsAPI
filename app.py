@@ -1,5 +1,4 @@
 
-import os
 import re
 from typing import Optional, Dict, Any
 
@@ -8,12 +7,14 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
 import uvicorn
 
-app = FastAPI(title="Gold Rate Fetcher via Google Custom Search API")
+app = FastAPI(title="Gold Rate via Google Custom Search API (inline keys)")
 
-API_KEY = os.getenv("AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk")      # set this in your environment
-CSE_ID  = os.getenv("AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk")       # set this in your environment
+# -------------------------------------------------------------------
+# Option 1: Hardcode your credentials here (simple but insecure)
+GOOGLE_API_KEY = "AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk"
+GOOGLE_CSE_ID  = "AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk"
+# -------------------------------------------------------------------
 
-# --- Regex helpers to pull a price and unit from Google's snippet ---
 PRICE_REGEX = re.compile(
     r"""
     (?P<currency>₹|INR|Rs\.?|rupee|USD|\$)\s*                 # currency
@@ -27,13 +28,7 @@ KARAT_REGEX = re.compile(r"(22k|24k|22kt|24kt|22\s*karat|24\s*karat)", re.IGNORE
 
 def extract_price_from_snippet(snippet: str) -> Dict[str, Any]:
     """Parse a snippet for price, currency, unit, karat (best-effort)."""
-    result = {
-        "price_text": None,
-        "currency": None,
-        "amount": None,
-        "unit": None,
-        "karat": None,
-    }
+    result = {"price_text": None, "currency": None, "amount": None, "unit": None, "karat": None}
     if not snippet:
         return result
 
@@ -55,19 +50,18 @@ def extract_price_from_snippet(snippet: str) -> Dict[str, Any]:
             result["karat"] = "22K"
         elif "24" in val:
             result["karat"] = "24K"
-
     return result
 
 
-def google_gold_rate(query="gold rate today in Bengaluru") -> Dict[str, Any]:
-    """Fetch top snippet from Google Custom Search API for the query."""
-    if not API_KEY or not CSE_ID:
-        raise ValueError("Please set GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables.")
+def google_gold_rate(query: str, api_key: str, cse_id: str) -> Dict[str, Any]:
+    """Fetch top result via Google Custom Search API."""
+    if not api_key or not cse_id:
+        raise ValueError("Missing API key or CSE ID.")
 
     url = "https://www.googleapis.com/customsearch/v1"
     params = {
-        "key": API_KEY,
-        "cx": CSE_ID,
+        "key": api_key,
+        "cx": cse_id,
         "q": query,
         "num": 1,
         "hl": "en",
@@ -99,20 +93,28 @@ def health():
 def gold_rate(
     city: str = Query("Bengaluru", description="City to include in the query"),
     karat: Optional[str] = Query(None, description="Optional karat like '22K' or '24K'"),
+    # Option 2: allow passing key/id via query (overrides hardcoded)
+    api_key: Optional[str] = Query(None, description="Google API key (overrides inline)"),
+    cse_id: Optional[str] = Query(None, description="Google CSE ID (overrides inline)"),
 ):
     """
-    Returns gold rate information derived from Google's top search result snippet.
-    Requires GOOGLE_API_KEY and GOOGLE_CSE_ID to be set.
+    Returns gold rate info derived from Google's top search result snippet.
+
+    You can:
+    - Hardcode GOOGLE_API_KEY and GOOGLE_CSE_ID at the top of the file, OR
+    - Pass them as query params: /gold?...&api_key=YOUR_KEY&cse_id=YOUR_CX
     """
     query_parts = ["gold rate today", city]
     if karat:
         query_parts.append(karat)
     query = " ".join(query_parts)
 
+    key = api_key or GOOGLE_API_KEY
+    cx  = cse_id or GOOGLE_CSE_ID
+
     try:
-        result = google_gold_rate(query)
+        result = google_gold_rate(query, key, cx)
     except ValueError as e:
-        # Missing env vars
         raise HTTPException(status_code=400, detail=str(e))
     except requests.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Google API HTTP error: {e}")
@@ -122,11 +124,10 @@ def gold_rate(
     snippet = result.get("snippet") or ""
     parsed = extract_price_from_snippet(snippet)
 
-    # Friendly hint if price was not parsed
     if not parsed.get("price_text"):
         parsed["note"] = (
             "Could not confidently extract a price from the snippet. "
-            "Result formats vary—consider visiting 'source' to parse the actual page."
+            "Visit 'source' to parse the actual page for exact values/units."
         )
 
     payload = {
@@ -140,5 +141,4 @@ def gold_rate(
 
 
 if __name__ == "__main__":
-    # Start FastAPI server
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
