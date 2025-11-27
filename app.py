@@ -12,7 +12,7 @@ app = FastAPI(title="Gold Rate via Google Custom Search API (inline keys)")
 # -------------------------------------------------------------------
 # Option 1: Hardcode your credentials here (simple but insecure)
 GOOGLE_API_KEY = "AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk"
-GOOGLE_CSE_ID  = "AIzaSyCJIlT9KZYlNM2bzBp-ll8oX0CipDmt4dk"
+GOOGLE_CSE_ID  = "2702ec7c4574d4be3"
 # -------------------------------------------------------------------
 
 PRICE_REGEX = re.compile(
@@ -142,3 +142,4 @@ def gold_rate(
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
