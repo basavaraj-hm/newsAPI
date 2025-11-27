@@ -1,231 +1,105 @@
 
-# main.py
-import os
-import asyncio
-from typing import Optional, List, Dict, Any
-
-# -------------------------------------------------------------
-# 1) Install AsyncioSelectorReactor BEFORE importing Twisted/Scrapy
-# -------------------------------------------------------------
-os.environ.pop("TWISTED_REACTOR", None)
-
-from twisted.internet import asyncioreactor
-asyncioreactor.install(asyncio.get_event_loop())
-
-from twisted.internet import reactor
-from twisted.internet import error as terror  # ConnectionDone, ConnectionLost
-
-from fastapi import FastAPI, Query
+import tempfile
+import json
+import subprocess
+import sys
+import textwrap
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
+import uvicorn
+import re
 
+app = FastAPI(title="Scrapy + FastAPI (Single File)")
+
+URL_REGEX = re.compile(r"^https?://", re.IGNORECASE)
+
+# Inline Scrapy spider code as a string
+SPIDER_CODE = textwrap.dedent("""
 import scrapy
-from scrapy.crawler import CrawlerRunner
-from scrapy import signals
+from w3lib.html import replace_escape_chars
 
-app = FastAPI(title="FastAPI + Scrapy (Immediate Results + Diagnostics)")
+class TextSpider(scrapy.Spider):
+    name = "textspider"
 
-# -------------------------------------------------------------
-# 2) Base Scrapy settings (polite; tweak per request below)
-# -------------------------------------------------------------
-BASE_SETTINGS = {
-    "ROBOTSTXT_OBEY": True,             # can be overridden per call
-    "DOWNLOAD_DELAY": 0.05,             # small delay; make 0.0 if you must be faster
-    "CONCURRENT_REQUESTS": 8,
-    "LOG_LEVEL": "INFO",
-    "USER_AGENT": "Mozilla/5.0 (compatible; FastAPI-Scrapy/1.0; +https://example.com/contact)",
-    "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
-    "DOWNLOAD_TIMEOUT": 10,             # per-request timeout
-    "DNS_TIMEOUT": 5,
-    "RETRY_ENABLED": True,
-    "RETRY_TIMES": 1,
-    "RETRY_HTTP_CODES": [500, 502, 503, 504, 522, 524, 408, 429],
-    "AUTOTHROTTLE_ENABLED": False,
-    "REDIRECT_ENABLED": True,
-    "TELNETCONSOLE_ENABLED": False,
-    "REACTOR_THREADPOOL_MAXSIZE": 20,
-
-    # Good default request headers
-    "DEFAULT_REQUEST_HEADERS": {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-    },
-}
-
-print("Twisted reactor in use:", reactor.__class__)
-
-# -------------------------------------------------------------
-# 3) Collect items AND every response (url + status) for diagnostics
-# -------------------------------------------------------------
-class Collector:
-    def __init__(self):
-        self.items: List[Dict] = []
-        self.responses: List[Dict[str, Any]] = []
-
-    def connect(self, crawler):
-        crawler.signals.connect(self._item_scraped, signal=signals.item_scraped)
-        crawler.signals.connect(self._response_received, signal=signals.response_received)
-
-    def _item_scraped(self, item, response, spider):
-        try:
-            self.items.append(dict(item))
-        except Exception:
-            self.items.append(item)
-
-    def _response_received(self, response, request, spider):
-        self.responses.append({
-            "url": response.url,
-            "status": response.status,
-            "is_robots": response.url.endswith("/robots.txt"),
-        })
-
-# -------------------------------------------------------------
-# 4) Quotes spider (Scrapy ≥ 2.13), first_hit controls pagination
-# -------------------------------------------------------------
-class QuoteItem(scrapy.Item):
-    text = scrapy.Field()
-    author = scrapy.Field()
-    tags = scrapy.Field()
-    source_url = scrapy.Field()
-
-class QuotesSpider(scrapy.Spider):
-    name = "quotes"
-    allowed_domains = ["quotes.toscrape.com"]
-    handle_httpstatus_all = True  # ensure we see non-200 responses in parse()
-
-    def __init__(self, tag: Optional[str] = None, first_hit: bool = True, **kwargs):
-        super().__init__(**kwargs)
-        self.tag = tag
-        self.first_hit = first_hit
-
-    async def start(self):
-        base = "https://quotes.toscrape.com/"
-        url = f"{base}tag/{self.tag}/" if self.tag else base
-        yield scrapy.Request(url, callback=self.parse, dont_filter=True)
-
-    # Backward-compat for Scrapy < 2.13
-    def start_requests(self):
-        base = "https://quotes.toscrape.com/"
-        url = f"{base}tag/{self.tag}/" if self.tag else base
-        yield scrapy.Request(url, callback=self.parse, dont_filter=True)
+    def __init__(self, url=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not url:
+            raise ValueError("url parameter is required")
+        self.start_urls = [url]
 
     def parse(self, response):
-        # If non-200, expose status in logs and just return
-        if response.status != 200:
-            self.logger.warning(f"Non-200 status {response.status} for {response.url}")
-            return
+        # Extract all visible text nodes under <body>
+        texts = response.xpath("//body//text()[normalize-space()]").getall()
+        cleaned = [replace_escape_chars(t.strip(), which_escapes=()) for t in texts if t.strip()]
+        page_text = " ".join(cleaned)
 
-        for q in response.css("div.quote"):
-            item = QuoteItem()
-            item["text"] = q.css("span.text::text").get()
-            item["author"] = q.css("small.author::text").get()
-            item["tags"] = q.css("div.tags a.tag::text").getall()
-            item["source_url"] = response.url
-            yield item
+        title = response.xpath("//title/text()").get() or ""
+        yield {
+            "url": response.url,
+            "title": title.strip(),
+            "text": page_text
+        }
+""")
 
-        # Only follow pagination when NOT first_hit
-        if not self.first_hit:
-            next_page = response.css("li.next a::attr(href)").get()
-            if next_page:
-                yield response.follow(next_page, callback=self.parse)
 
-# -------------------------------------------------------------
-# 5) Endpoint: return results on the first hit + diagnostics
-# -------------------------------------------------------------
-@app.get("/scrape-quotes")
-async def scrape_quotes(
-    tag: Optional[str] = Query(default=None, description="Filter quotes by tag, e.g., 'life'"),
-    first_hit: bool = Query(default=True, description="Only scrape the first page for a fast response"),
-    obey_robots: bool = Query(default=False, description="Respect robots.txt (set to true for compliance)"),
-    item_limit: int = Query(default=0, ge=0, le=100, description="Stop after N items (0 = no cap)"),
-    timeout: float = Query(default=25.0, ge=5.0, le=300.0, description="Max seconds to wait"),
-    log_level: str = Query(default="INFO", description="Scrapy log level"),
-):
+def run_spider_once(url: str):
     """
-    Returns quotes in the first call:
-    - first_hit=True: scrape only the first page (no pagination).
-    - obey_robots: default False here for speed; set True if required by policy.
-    - item_limit: optional CloseSpider item cap for faster completion.
-    - Includes diagnostics (responses + stats) so we can see why items might be 0.
+    Run the inline Scrapy spider via `scrapy runspider` and return parsed items.
     """
-    settings = {
-        **BASE_SETTINGS,
-        "ROBOTSTXT_OBEY": obey_robots,
-        "LOG_LEVEL": log_level,
-    }
-    if item_limit > 0:
-        settings["CLOSESPIDER_ITEMCOUNT"] = item_limit
+    # Create a temporary file for the spider
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as spider_file:
+        spider_path = spider_file.name
+        spider_file.write(SPIDER_CODE)
 
-    runner = CrawlerRunner(settings=settings)
+    # Create a temporary file for JSON output
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as out_file:
+        out_path = out_file.name
 
-    collector = Collector()
-    crawler = runner.create_crawler(QuotesSpider)
-    collector.connect(crawler)
+    # Build the command
+    cmd = [
+        sys.executable, "-m", "scrapy", "runspider", spider_path,
+        "-a", f"url={url}",
+        "-o", out_path,
+        "-t", "json"
+    ]
+
+    # Run the spider
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Handle errors
+    if result.returncode != 0:
+        raise RuntimeError(f"Scrapy failed: {result.stderr.strip() or result.stdout.strip()}")
+
+    # Read the JSON output
+    try:
+        with open(out_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        raise RuntimeError(f"Failed to read spider output: {e}")
+
+    return data
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/scrape")
+def scrape(url: str = Query(..., description="Full URL to scrape (http/https)")):
+    if not URL_REGEX.match(url):
+        raise HTTPException(status_code=400, detail="Invalid URL. Must start with http:// or https://")
 
     try:
-        d = runner.crawl(crawler, tag=tag, first_hit=first_hit)
-        d.addErrback(lambda f: f.trap(terror.ConnectionDone, terror.ConnectionLost))
-        fut = d.asFuture(asyncio.get_event_loop())
-        await asyncio.wait_for(fut, timeout=timeout)
-
-        # Always include diagnostics to understand 0-item cases
-        return {
-            "count": len(collector.items),
-            "results": collector.items,
-            "responses": collector.responses,
-            "stats": crawler.stats.get_stats() or {},
-            "params": {
-                "tag": tag,
-                "first_hit": first_hit,
-                "obey_robots": obey_robots,
-                "item_limit": item_limit,
-                "timeout": timeout,
-                "log_level": log_level,
-            },
-        }
-
-    except asyncio.TimeoutError:
-        try:
-            crawler.stop()
-        except Exception:
-            pass
-        return JSONResponse(
-            status_code=206,  # Partial Content
-            content={
-                "partial": True,
-                "message": f"Timed out after {timeout} seconds — returning diagnostics.",
-                "count": len(collector.items),
-                "results": collector.items,
-                "responses": collector.responses,
-                "stats": crawler.stats.get_stats() or {},
-                "params": {
-                    "tag": tag,
-                    "first_hit": first_hit,
-                    "obey_robots": obey_robots,
-                    "item_limit": item_limit,
-                    "timeout": timeout,
-                    "log_level": log_level,
-                },
-            },
-        )
-
+        items = run_spider_once(url)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        try:
-            crawler.stop()
-        except Exception:
-            pass
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": str(e),
-                "responses": collector.responses,
-                "stats": crawler.stats.get_stats() or {},
-            },
-        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
-# -------------------------------------------------------------
-# 6) Reactor info
-# -------------------------------------------------------------
-@app.get("/reactor")
-def reactor_info():
-    return {"reactor": str(reactor.__class__)}
+    return JSONResponse(content={"count": len(items), "items": items})
+
+
+if __name__ == "__main__":
+    # Run FastAPI with uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
