@@ -12,7 +12,10 @@ httpx
 scrape
 crochet
 lxml
+feedparser
 httpx[http2]
+python-dotenv
+
 
 
 
