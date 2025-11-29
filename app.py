@@ -38,7 +38,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+NEWSAPI_KEY = "fdf85b10d39a4f9f82f95ca9255ba43f"
 BING_NEWS_KEY = os.getenv("BING_NEWS_KEY")
 POLL_INTERVAL_MINUTES = int(os.getenv("POLL_INTERVAL_MINUTES", "10"))
 
@@ -531,4 +531,5 @@ def clear_alerts():
 def list_seen(limit: int = 50):
     items = list(SEEN_IDS)[:limit]
     return {"count": len(SEEN_IDS), "sample": items}
+
 
