@@ -1,5 +1,23 @@
 
 # app.py
+"""
+India/Bengaluru News Feeder — FastAPI (single file, no webhook)
+- RSS + optional NewsAPI + optional Bing News
+- In-memory alerts buffer
+- Expanded stock-market keywords
+- 15-stock watchlist with aliases
+- Endpoints to manage feeds, keywords, watchlist, scheduler
+
+Run:
+  python -m venv .venv && source .venv/bin/activate
+  pip install fastapi uvicorn apscheduler python-dotenv feedparser requests
+  uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+Env (.env):
+  POLL_INTERVAL_MINUTES=10
+  NEWSAPI_KEY=<optional>
+  BING_NEWS_KEY=<optional>
+  ALERTS_CAPACITY=500
+"""
 
 import os
 import re
@@ -8,7 +26,7 @@ import feedparser
 import requests
 from collections import deque
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Pattern
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.job import Job
@@ -20,11 +38,8 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-# Optional APIs
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 BING_NEWS_KEY = os.getenv("BING_NEWS_KEY")
-
-# Poll interval
 POLL_INTERVAL_MINUTES = int(os.getenv("POLL_INTERVAL_MINUTES", "10"))
 
 # --------------------- Sources ---------------------
@@ -65,8 +80,7 @@ NEWSAPI_DOMAINS = ",".join([
     "newindianexpress.com",
 ])
 
-
-# --------------------- Keywords ---------------------
+# --------------------- Keywords (expanded with stocks) ---------------------
 KEYWORDS: List[str] = [
     # Geography & civic
     r"\bBengaluru\b", r"\bBangalore\b", r"\bKarnataka\b", r"\bNamma Metro\b",
@@ -91,7 +105,7 @@ KEYWORDS: List[str] = [
     r"\bNSE\b", r"\bBSE\b", r"\bstock market\b", r"\bequity\b", r"\bcapital market\b",
     r"\bbroader market\b", r"\bmidcap\b", r"\bsmallcap\b",
 
-    # Price movement verbs/adjectives (stock or index context)
+    # Price movement verbs/adjectives (scoped)
     r"\bstock (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
     r"\bshares? (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
     r"\bindex (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
@@ -111,8 +125,7 @@ KEYWORDS: List[str] = [
 
     # F&O / Derivatives
     r"\bfutures\b", r"\boptions\b", r"\bderivatives\b", r"\bopen interest\b", r"\brollover(s)?\b",
-    r"\bshort (covering|build)\b", r"\blong (build|unwind)\b", r"\bPut\b", r"\bCall\b",
-    r"\bPCR\b",
+    r"\bshort (covering|build)\b", r"\blong (build|unwind)\b", r"\bPut\b", r"\bCall\b", r"\bPCR\b",
 
     # Brokerage / rating actions
     r"\bbrokerage\b", r"\bupgrade\b", r"\bdowngrade\b", r"\bbuy rating\b", r"\bsell rating\b",
@@ -129,6 +142,43 @@ KEYWORDS: List[str] = [
     r"\bpharma\b", r"\bIT stocks?\b", r"\bbanking stocks?\b", r"\bPSU\b", r"\bauto stocks?\b",
 ]
 
+# --------------------- Watchlist (15 stocks + aliases) ---------------------
+WATCHLIST: List[str] = [
+    "Reliance Industries",
+    "HDFC Bank",
+    "ICICI Bank",
+    "Tata Consultancy Services",  # TCS
+    "Infosys",
+    "Wipro",
+    "State Bank of India",        # SBI
+    "Kotak Mahindra Bank",
+    "Axis Bank",
+    "Larsen & Toubro",            # L&T
+    "Hindustan Unilever",         # HUL
+    "Tata Motors",
+    "Maruti Suzuki",
+    "Bharti Airtel",
+    "ITC",
+]
+
+def _compile_watchlist_patterns(names: List[str]) -> List[Pattern]:
+    pats: List[Pattern] = []
+    for n in names:
+        escaped = re.escape(n)
+        pats.append(re.compile(rf"\b{escaped}\b", re.IGNORECASE))
+        # Common aliases
+        if n == "Tata Consultancy Services":
+            pats.append(re.compile(r"\bTCS\b", re.IGNORECASE))
+        if n == "State Bank of India":
+            pats.append(re.compile(r"\bSBI\b", re.IGNORECASE))
+        if n == "Hindustan Unilever":
+            pats.append(re.compile(r"\bHUL\b", re.IGNORECASE))
+        if n == "Larsen & Toubro":
+            pats.append(re.compile(r"\bL\s*&\s*T\b", re.IGNORECASE))  # L & T
+            pats.append(re.compile(r"\bL&T\b", re.IGNORECASE))
+    return pats
+
+WATCHLIST_PATTERNS: List[Pattern] = _compile_watchlist_patterns(WATCHLIST)
 
 # --------------------- De-duplication ---------------------
 SEEN_IDS: set[str] = set()
@@ -137,15 +187,19 @@ def stable_id_from(title: str, link: str) -> str:
     base = (title or "") + (link or "")
     return re.sub(r"\s+", "", base.strip().lower())[:256]
 
-def matches_keywords(text: str) -> bool:
+# --------------------- Matching (keywords + watchlist) ---------------------
+def matches_text(text: str) -> bool:
     if not text:
         return False
     for pattern in KEYWORDS:
         if re.search(pattern, text, flags=re.IGNORECASE):
             return True
+    for pat in WATCHLIST_PATTERNS:
+        if pat.search(text):
+            return True
     return False
 
-# --------------------- In-memory Alerts (replace webhook) ---------------------
+# --------------------- In-memory Alerts ---------------------
 ALERTS_CAPACITY = int(os.getenv("ALERTS_CAPACITY", "500"))
 ALERTS: deque[Dict[str, Any]] = deque(maxlen=ALERTS_CAPACITY)
 
@@ -175,7 +229,7 @@ def process_rss_feed(feed_url: str):
             if uid in SEEN_IDS:
                 continue
             text = f"{title}\n{summary}"
-            if matches_keywords(text):
+            if matches_text(text):
                 SEEN_IDS.add(uid)
                 store_alert(title, summary, link, source, published)
     except Exception as e:
@@ -218,7 +272,7 @@ def process_newsapi():
         if uid in SEEN_IDS:
             continue
         text = f"{title}\n{description}"
-        if matches_keywords(text):
+        if matches_text(text):
             SEEN_IDS.add(uid)
             store_alert(title, description, url, source, published_at)
 
@@ -261,7 +315,7 @@ def process_bing_news():
         if uid in SEEN_IDS:
             continue
         text = f"{name}\n{desc}"
-        if matches_keywords(text):
+        if matches_text(text):
             SEEN_IDS.add(uid)
             store_alert(name, desc, url, source_name, date_published)
 
@@ -311,6 +365,7 @@ class NewsFeederService:
             "next_run_time": job.next_run_time.isoformat() if job and job.next_run_time else None,
             "feeds_count": len(RSS_FEEDS),
             "keywords_count": len(KEYWORDS),
+            "watchlist_count": len(WATCHLIST),
             "seen_count": len(SEEN_IDS),
             "alerts_count": len(ALERTS),
             "newsapi_enabled": bool(NEWSAPI_KEY),
@@ -320,14 +375,19 @@ class NewsFeederService:
 service = NewsFeederService()
 
 # --------------------- FastAPI ---------------------
-app = FastAPI(title="India/Bengaluru News Feeder", version="1.1.0", description="News alerts API (no webhook)")
+app = FastAPI(title="India/Bengaluru News Feeder", version="1.2.0", description="News alerts API (no webhook)")
 
+# Models
 class FeedsUpdate(BaseModel):
     feeds: List[str]
 
 class KeywordsUpdate(BaseModel):
     keywords: List[str]
 
+class WatchlistUpdate(BaseModel):
+    names: List[str]
+
+# --- Health & Control ---
 @app.get("/health")
 def health():
     return {"status": "ok", "time": datetime.now().isoformat()}
@@ -352,7 +412,7 @@ def stop():
     service.stop_interval()
     return {"message": "Scheduler stopped", "status": service.status()}
 
-# ---- Feeds management ----
+# --- Feeds management ---
 @app.get("/feeds")
 def list_feeds():
     return {"feeds": RSS_FEEDS}
@@ -378,7 +438,7 @@ def remove_feed(url: str):
     except ValueError:
         raise HTTPException(status_code=404, detail="Feed not found")
 
-# ---- Keyword management ----
+# --- Keywords management ---
 @app.get("/keywords")
 def list_keywords():
     return {"keywords": KEYWORDS}
@@ -404,7 +464,40 @@ def remove_keyword(pattern: str):
     except ValueError:
         raise HTTPException(status_code=404, detail="Keyword not found")
 
-# ---- Alerts (new) ----
+# --- Watchlist management ---
+@app.get("/watchlist")
+def list_watchlist():
+    return {"count": len(WATCHLIST), "names": WATCHLIST}
+
+@app.post("/watchlist")
+def set_watchlist(update: WatchlistUpdate):
+    global WATCHLIST, WATCHLIST_PATTERNS
+    if not update.names:
+        raise HTTPException(status_code=400, detail="Watchlist cannot be empty")
+    WATCHLIST = update.names
+    WATCHLIST_PATTERNS = _compile_watchlist_patterns(WATCHLIST)
+    return {"message": "Watchlist replaced", "count": len(WATCHLIST), "names": WATCHLIST}
+
+@app.post("/watchlist/add")
+def add_watchlist_name(name: str):
+    global WATCHLIST, WATCHLIST_PATTERNS
+    if name in WATCHLIST:
+        raise HTTPException(status_code=400, detail="Name already in watchlist")
+    WATCHLIST.append(name)
+    WATCHLIST_PATTERNS = _compile_watchlist_patterns(WATCHLIST)
+    return {"message": "Name added", "count": len(WATCHLIST), "names": WATCHLIST}
+
+@app.delete("/watchlist/remove")
+def remove_watchlist_name(name: str):
+    global WATCHLIST, WATCHLIST_PATTERNS
+    try:
+        WATCHLIST.remove(name)
+        WATCHLIST_PATTERNS = _compile_watchlist_patterns(WATCHLIST)
+        return {"message": "Name removed", "count": len(WATCHLIST), "names": WATCHLIST}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Name not found in watchlist")
+
+# --- Alerts (list/clear) ---
 @app.get("/alerts")
 def list_alerts(
     limit: int = Query(50, ge=1, le=ALERTS_CAPACITY),
@@ -424,9 +517,8 @@ def clear_alerts():
     ALERTS.clear()
     return {"message": "Alerts cleared"}
 
-# ---- Debug: seen IDs ----
+# --- Debug: seen IDs ---
 @app.get("/seen")
 def list_seen(limit: int = 50):
     items = list(SEEN_IDS)[:limit]
     return {"count": len(SEEN_IDS), "sample": items}
-
