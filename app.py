@@ -65,21 +65,70 @@ NEWSAPI_DOMAINS = ",".join([
     "newindianexpress.com",
 ])
 
+
 # --------------------- Keywords ---------------------
 KEYWORDS: List[str] = [
     # Geography & civic
     r"\bBengaluru\b", r"\bBangalore\b", r"\bKarnataka\b", r"\bNamma Metro\b",
     r"\bBBMP\b", r"\bBMRCL\b", r"\btraffic\b", r"\bwater supply\b", r"\bflood\b",
-    # Business/finance/economy
+
+    # Business/finance/economy (general)
     r"\bacquisition\b", r"\bmerger\b", r"\bIPO\b", r"\bfunding\b",
     r"\bRBI\b", r"\binterest rate\b", r"\binflation\b",
-    r"\bstock (surge|crash|fall|plunge|rally)\b",
+
     # Tech/startups/IT
     r"\bstartup\b", r"\bunicorn\b", r"\bAI\b", r"\bSaaS\b", r"\bdeeptech\b",
     r"\bIT services\b", r"\bInfosys\b", r"\bWipro\b", r"\bTCS\b",
+
     # Kannada (optional)
     r"\bಬೆಂಗಳೂರು\b", r"\bಕರ್ನಾಟಕ\b", r"\bಮೆಟ್ರೋ\b", r"\bಹೂಡಿಕೆ\b", r"\bಸ್ಟಾರ್ಟಪ್\b",
+
+    # --------------------- Stocks & Markets (India) ---------------------
+    # Index names
+    r"\bSensex\b", r"\bNifty\b", r"\bNifty 50\b", r"\bNifty Bank\b", r"\bBank Nifty\b",
+
+    # Exchanges & general market terms
+    r"\bNSE\b", r"\bBSE\b", r"\bstock market\b", r"\bequity\b", r"\bcapital market\b",
+    r"\bbroader market\b", r"\bmidcap\b", r"\bsmallcap\b",
+
+    # Price movement verbs/adjectives (stock or index context)
+    r"\bstock (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
+    r"\bshares? (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
+    r"\bindex (surge|crash|fall|plunge|rally|jump|soar|slump|tank|dip|rebound)\b",
+
+    # Price/target/returns
+    r"\bshare price\b", r"\bstock price\b", r"\bmarket cap\b", r"\bmarket capitalization\b",
+    r"\b52[- ]?week (high|low)\b", r"\btarget price\b", r"\bprice target\b",
+    r"\breturn(s)?\b", r"\bCAGR\b",
+
+    # Corporate actions & distributions
+    r"\bdividend\b", r"\binterim dividend\b", r"\bfinal dividend\b", r"\bbuyback\b",
+    r"\bbonus issue\b", r"\bstock split\b", r"\brights issue\b", r"\bprimary issue\b",
+
+    # Earnings & guidance
+    r"\bquarterly result(s)?\b", r"\bQ[1-4]\b", r"\bearnings\b", r"\bEPS\b",
+    r"\brevenue\b", r"\bPAT\b", r"\bEBITDA\b", r"\bguidance\b", r"\bprofit\b", r"\bloss(es)?\b",
+
+    # F&O / Derivatives
+    r"\bfutures\b", r"\boptions\b", r"\bderivatives\b", r"\bopen interest\b", r"\brollover(s)?\b",
+    r"\bshort (covering|build)\b", r"\blong (build|unwind)\b", r"\bPut\b", r"\bCall\b",
+    r"\bPCR\b",
+
+    # Brokerage / rating actions
+    r"\bbrokerage\b", r"\bupgrade\b", r"\bdowngrade\b", r"\bbuy rating\b", r"\bsell rating\b",
+    r"\bneutral rating\b", r"\bhold rating\b", r"\boverweight\b", r"\bunderweight\b",
+
+    # Regulatory / listing
+    r"\bSEBI\b", r"\blisting\b", r"\bdelisting\b",
+
+    # Fund flows / macro market drivers
+    r"\bFII\b", r"\bDII\b", r"\bforeign inflow(s)?\b", r"\bdomestic inflow(s)?\b",
+    r"\bnet (buy|sell)\b",
+
+    # Sector terms often tied to stock moves
+    r"\bpharma\b", r"\bIT stocks?\b", r"\bbanking stocks?\b", r"\bPSU\b", r"\bauto stocks?\b",
 ]
+
 
 # --------------------- De-duplication ---------------------
 SEEN_IDS: set[str] = set()
@@ -380,3 +429,4 @@ def clear_alerts():
 def list_seen(limit: int = 50):
     items = list(SEEN_IDS)[:limit]
     return {"count": len(SEEN_IDS), "sample": items}
+
