@@ -140,6 +140,15 @@ KEYWORDS: List[str] = [
 
     # Sector terms often tied to stock moves
     r"\bpharma\b", r"\bIT stocks?\b", r"\bbanking stocks?\b", r"\bPSU\b", r"\bauto stocks?\b",
+
+  
+    # ... existing stock keywords ...
+    # Commodities: Gold
+    r"\bgold\b", r"\bgold price\b", r"\bgold rate\b", r"\bgold prices?\b",
+    r"\bgold futures?\b", r"\bgold demand\b", r"\bgold import\b", r"\bgold export\b",
+    r"\bgold jewelry\b", r"\bgold bullion\b", r"\bgold ETF\b", r"\bgold investment\b",
+    r"\bgold buying\b", r"\bgold selling\b", r"\bgold market\b",
+
 ]
 
 # --------------------- Watchlist (15 stocks + aliases) ---------------------
@@ -522,3 +531,4 @@ def clear_alerts():
 def list_seen(limit: int = 50):
     items = list(SEEN_IDS)[:limit]
     return {"count": len(SEEN_IDS), "sample": items}
+
